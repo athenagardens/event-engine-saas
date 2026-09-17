@@ -12,21 +12,55 @@
       "venue_catalog": [
         {
           "item_id": "v_01",
-          "item_name": "Standard Garden Lawn (Up to 100 Guests)",
+          "item_name": "Standard Garden Lawn Package (Up to 100 Guests)",
           "price": 5000.00,
           "unit": "Per Day"
         },
         {
           "item_id": "v_02",
-          "item_name": "Grand Pavilion & Lawns (Up to 300 Guests)",
+          "item_name": "Grand Pavilion & Executive Lawns (Up to 300 Guests)",
           "price": 12000.00,
           "unit": "Per Day"
         }
       ],
-      "partner_suppliers": ["saina_essential", "savory_catering"]
+      "partner_suppliers": ["savory_catering", "saina_essential"]
     }
   },
   "suppliers": {
+    "savory_catering": {
+      "business_name": "Savory Bites Catering",
+      "category": "Catering & Buffets",
+      "whatsapp": "26772222222",
+      "catalog": [
+        {
+          "item_id": "cat_01",
+          "item_name": "3-Course Premium Wedding Buffet",
+          "price": 220.00,
+          "unit": "Per Guest",
+          "max_qty": 500,
+          "image_url": "https://images.unsplash.com/photo-1555244162-803834f70033?w=400",
+          "inclusions": [
+            "Starters: Creamy Butternut Soup & Fresh Rolls",
+            "Mains: Braised Beef, Roast Chicken, Savory Rice, 2 Seasonal Salads",
+            "Dessert: Malva Pudding & Custard",
+            "Tableware: Dinner plates, side plates, stainless steel cutlery, water glasses, wine glasses"
+          ]
+        },
+        {
+          "item_id": "cat_02",
+          "item_name": "Executive Cocktail & Canapé Spread",
+          "price": 150.00,
+          "unit": "Per Guest",
+          "max_qty": 300,
+          "image_url": "https://images.unsplash.com/photo-1541544741938-0af808871cc0?w=400",
+          "inclusions": [
+            "5 Finger Food Variations (Meat & Veggie)",
+            "Welcome Drinks & Cocktail Glassware",
+            "Full Service Waitstaff & Platters"
+          ]
+        }
+      ]
+    },
     "saina_essential": {
       "business_name": "Saina Essential",
       "category": "Decor & Event Styling",
@@ -38,30 +72,25 @@
           "price": 3500.00,
           "unit": "Per Unit",
           "max_qty": 2,
-          "image_url": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400"
+          "image_url": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400",
+          "inclusions": [
+            "Wooden Arch Frame with Fresh/High-Grade Silk Floral Arrangements",
+            "Stage Backdrop & Ambient Spotlighting",
+            "Setup, Delivery, and Takedown Service"
+          ]
         },
         {
           "item_id": "se_02",
-          "item_name": "Premium Table Centerpiece & Runners",
+          "item_name": "Premium Table Centerpiece & Runners Package",
           "price": 350.00,
           "unit": "Per Table",
-          "max_qty": 30,
-          "image_url": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=400"
-        }
-      ]
-    },
-    "savory_catering": {
-      "business_name": "Savory Bites Catering",
-      "category": "Catering & Buffets",
-      "whatsapp": "26772222222",
-      "catalog": [
-        {
-          "item_id": "cat_01",
-          "item_name": "Traditional 3-Course Buffet Menu",
-          "price": 180.00,
-          "unit": "Per Guest",
-          "max_qty": 500,
-          "image_url": "https://images.unsplash.com/photo-1555244162-803834f70033?w=400"
+          "max_qty": 50,
+          "image_url": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=400",
+          "inclusions": [
+            "Custom Floral Arrangement in Crystal/Gold Vases",
+            "Satin/Velvet Table Runners & Napkin Rings",
+            "Tea Light Candle Holders & Candles"
+          ]
         }
       ]
     }
