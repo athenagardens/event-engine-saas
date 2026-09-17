@@ -1,1 +1,69 @@
-
+{
+  "venues": {
+    "athena": {
+      "business_name": "Athena Gardens Venue",
+      "tagline": "Luxury Outdoor Event & Wedding Spaces",
+      "logo_file": "logos/athena_logo.png",
+      "theme_color": "#1B4D3E",
+      "whatsapp": "26774501880",
+      "bank_name": "First National Bank (FNB)",
+      "account_name": "Athena Gardens Venue",
+      "account_number": "62000000002",
+      "venue_catalog": [
+        {
+          "item_id": "v_01",
+          "item_name": "Standard Garden Lawn (Up to 100 Guests)",
+          "price": 5000.00,
+          "unit": "Per Day"
+        },
+        {
+          "item_id": "v_02",
+          "item_name": "Grand Pavilion & Lawns (Up to 300 Guests)",
+          "price": 12000.00,
+          "unit": "Per Day"
+        }
+      ],
+      "partner_suppliers": ["saina_essential", "savory_catering"]
+    }
+  },
+  "suppliers": {
+    "saina_essential": {
+      "business_name": "Saina Essential",
+      "category": "Decor & Event Styling",
+      "whatsapp": "26774501880",
+      "catalog": [
+        {
+          "item_id": "se_01",
+          "item_name": "Luxury Rustic Floral Arch & Stage Setup",
+          "price": 3500.00,
+          "unit": "Per Unit",
+          "max_qty": 2,
+          "image_url": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=400"
+        },
+        {
+          "item_id": "se_02",
+          "item_name": "Premium Table Centerpiece & Runners",
+          "price": 350.00,
+          "unit": "Per Table",
+          "max_qty": 30,
+          "image_url": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=400"
+        }
+      ]
+    },
+    "savory_catering": {
+      "business_name": "Savory Bites Catering",
+      "category": "Catering & Buffets",
+      "whatsapp": "26772222222",
+      "catalog": [
+        {
+          "item_id": "cat_01",
+          "item_name": "Traditional 3-Course Buffet Menu",
+          "price": 180.00,
+          "unit": "Per Guest",
+          "max_qty": 500,
+          "image_url": "https://images.unsplash.com/photo-1555244162-803834f70033?w=400"
+        }
+      ]
+    }
+  }
+}
