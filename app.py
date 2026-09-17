@@ -97,17 +97,22 @@ for s_id in partner_ids:
             with col_target:
                 with st.container(border=True):
                     if item.get("image_url"):
-                        st.image(item["image_url"], use_container_width=True)
+                        # Updated to new Streamlit width parameter syntax
+                        st.image(item["image_url"], width="stretch")
                     st.write(f"**{item['item_name']}**")
                     st.write(f"Price: P{item['price']:,.2f} ({item['unit']})")
                     
-                    default_qty = guest_count if "Guest" in item["unit"] else (tables_count if "Table" in item["unit"] else 1)
+                    max_limit = item.get("max_qty", 500)
+                    raw_default = guest_count if "Guest" in item["unit"] else (tables_count if "Table" in item["unit"] else 1)
+                    
+                    # FIX: Cap default_qty so it never exceeds max_qty
+                    safe_default_qty = min(raw_default, max_limit)
                     
                     qty_selected = st.number_input(
                         f"Quantity ({item['item_name']}):",
                         min_value=1,
-                        max_value=item.get("max_qty", 500),
-                        value=default_qty,
+                        max_value=max_limit,
+                        value=safe_default_qty,
                         key=f"qty_{s_id}_{idx}"
                     )
                     
@@ -124,7 +129,6 @@ for s_id in partner_ids:
                             "whatsapp": sup["whatsapp"]
                         })
                         grand_total += item_total
-
 # 5. CART SUMMARY & CHECKOUT
 if cart_items:
     st.markdown("---")
