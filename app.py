@@ -12,7 +12,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # 1. PAGE SETUP
-st.set_page_config(page_title="EventEngine SaaS Engine", page_icon="🏰", layout="wide")
+st.set_page_config(page_title="Event SaaS Engine", page_icon="🏰", layout="wide")
 
 CONFIG_FILE = "vendors.json"
 BOOKINGS_FILE = "bookings.json"
@@ -55,18 +55,18 @@ for s_id, sup in all_suppliers.items():
 query_params = st.query_params
 active_venue_id = query_params.get("vendor", "athena")
 
-st.sidebar.title("🌐 SaaS Portal Directory")
+st.sidebar.title("SaaS Portal Directory")
 route = st.sidebar.radio("Navigation:", ["Client Booking Portal", "Venue & Vendor Registration", "SaaS Master Admin"])
 
 # ROUTE 1: ONBOARDING
 if route == "Venue & Vendor Registration":
-    st.title("🚀 Join the EventEngine SaaS Platform")
+    st.title("Join the EventEngine SaaS Platform")
     st.write("Register your venue or supplier business to accept client bookings online.")
     
     reg_type = st.radio("I want to register as a:", ["Primary Venue (e.g., Garden, Hall, Estate)", "Value-Add Supplier (e.g., Caterer, Florist, Decor)"])
     
     if reg_type == "Primary Venue (e.g., Garden, Hall, Estate)":
-        st.subheader("🏛️ Register Your Venue")
+        st.subheader("Register Your Venue")
         with st.form("venue_reg_form"):
             v_id = st.text_input("Unique ID (e.g., royaloak):").lower().strip()
             v_name = st.text_input("Business Name:")
@@ -134,7 +134,7 @@ elif route == "SaaS Master Admin":
     if login_submitted or pin == "admin2026":
         if pin == "admin2026":
             st.success("🔓 Access Granted!")
-            st.subheader("📊 Platform Financial Metrics")
+            st.subheader("Platform Financial Metrics")
             col1, col2, col3 = st.columns(3)
             col1.metric("Active Venues", len(venues))
             col2.metric("Active Suppliers", len(all_suppliers))
@@ -158,7 +158,7 @@ elif route == "SaaS Master Admin":
                 st.info("No venues registered yet.")
             
             # Formatted Suppliers Table
-            st.subheader("🛍️ Registered Suppliers")
+            st.subheader("Registered Suppliers")
             if all_suppliers:
                 supplier_rows = []
                 for s_id, s_info in all_suppliers.items():
@@ -173,7 +173,7 @@ elif route == "SaaS Master Admin":
                 st.info("No suppliers registered yet.")
                 
             # Formatted Bookings Table
-            st.subheader("📅 Stored Customer Bookings")
+            st.subheader("Stored Customer Bookings")
             bookings = load_bookings()
             if bookings:
                 st.table(pd.DataFrame(bookings))
