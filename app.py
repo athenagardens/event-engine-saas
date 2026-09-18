@@ -112,19 +112,25 @@ st.markdown(f"""
         color: #F8FAFC !important;
     }}
 
+    /* Hide default radio header label to control spacing manually */
+    [data-testid="stSidebar"] [data-testid="stRadio"] > label {{
+        display: none !important;
+    }}
+
     /* Sidebar Radio Widget Group Container */
     [data-testid="stSidebar"] [data-testid="stRadio"] {{
         width: 100% !important;
     }}
 
+    /* Flexbox layout for menu items with equal spacing */
     [data-testid="stSidebar"] [data-testid="stRadio"] > div {{
         width: 100% !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 10px !important;
+        gap: 12px !important; /* Uniform exact space between all menu bars */
     }}
 
-    /* Individual Navigation Buttons (Centered & Equal Sizes) */
+    /* Individual Navigation Buttons (Centered & Identical Height/Width) */
     [data-testid="stSidebar"] [data-testid="stRadio"] label {{
         background: rgba(255, 255, 255, 0.05) !important;
         border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -230,10 +236,14 @@ with st.sidebar:
     st.caption("Venue & Service Management System")
     st.markdown("---")
     
+    # Custom Header text with extra spacing below it before the first menu item
+    st.markdown("<p style='font-weight:700; font-size:0.85rem; letter-spacing:0.05em; margin-bottom:18px;'>NAVIGATION MENU</p>", unsafe_allow_html=True)
+    
     route = st.radio(
         "NAVIGATION MENU", 
         ["Customer Marketplace", "Vendor Dashboard", "Partner Onboarding", "Master Administration"],
-        index=0
+        index=0,
+        label_visibility="collapsed"
     )
     st.markdown("---")
     
