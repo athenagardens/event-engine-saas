@@ -102,48 +102,61 @@ st.markdown(f"""
         background-color: #F8FAFC;
     }}
 
-    /* Colored Corporate Sidebar Styling */
+    /* Sidebar Container Box */
     [data-testid="stSidebar"] {{
         background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%) !important;
         border-right: 1px solid #334155;
     }}
+
     [data-testid="stSidebar"] * {{
         color: #F8FAFC !important;
     }}
-    
-    /* Strict Uniform Width & Alignment for Navigation Items */
+
+    /* Sidebar Radio Widget Group Container */
     [data-testid="stSidebar"] [data-testid="stRadio"] {{
         width: 100% !important;
     }}
+
     [data-testid="stSidebar"] [data-testid="stRadio"] > div {{
         width: 100% !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 8px !important;
+        gap: 10px !important;
     }}
+
+    /* Individual Navigation Buttons (Centered & Equal Sizes) */
     [data-testid="stSidebar"] [data-testid="stRadio"] label {{
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-radius: 8px !important;
         padding: 0 16px !important;
-        height: 48px !important;
+        height: 52px !important;
+        width: 100% !important;
         display: flex !important;
         align-items: center !important;
-        width: 100% !important;
-        min-width: 100% !important;
-        max-width: 100% !important;
+        justify-content: center !important;
         box-sizing: border-box !important;
         margin: 0 !important;
+        cursor: pointer !important;
+        transition: background 0.2s ease-in-out;
     }}
-    [data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
-        flex-shrink: 0 !important;
-    }}
-    [data-testid="stSidebar"] [data-testid="stRadio"] label > div:nth-child(2) {{
-        flex-grow: 1 !important;
-        width: 100% !important;
-    }}
+
+    /* Hover & Active States */
     [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.12) !important;
+        border-color: rgba(255, 255, 255, 0.25) !important;
+    }}
+
+    /* Alignment & Text Centering */
+    [data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
+        margin-right: 8px !important;
+    }}
+
+    [data-testid="stSidebar"] [data-testid="stRadio"] label > div:nth-child(2) p {{
+        font-size: 0.92rem !important;
+        font-weight: 600 !important;
+        text-align: center !important;
+        margin: 0 !important;
     }}
     
     /* Main Header Container */
