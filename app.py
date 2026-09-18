@@ -129,26 +129,36 @@ if route == "Venue & Vendor Registration":
 # ---------------------------------------------------------
 # ROUTE 2: MASTER SAAS ADMIN CONSOLE
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# ROUTE 2: MASTER SAAS ADMIN CONSOLE
+# ---------------------------------------------------------
 elif route == "SaaS Master Admin":
     st.title("🔑 Master SaaS Platform Admin")
-    pin = st.text_input("Enter Admin Security PIN:", type="password")
     
-    if pin == "admin2026":
-        st.subheader("📊 Platform Financial Metrics")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Active Venues", len(venues))
-        col2.metric("Active Suppliers", len(all_suppliers))
-        col3.metric("Est. Monthly Revenue", f"P{len(venues)*1500 + len(all_suppliers)*500:,.2f}")
-        
-        st.subheader("🏢 Registered Venues")
-        st.json(venues)
-        
-        st.subheader("🛍️ Registered Suppliers")
-        st.json(all_suppliers)
-        
-        st.subheader("📅 Stored Customer Bookings")
-        st.json(load_bookings())
-
+    with st.form("admin_login_form"):
+        pin = st.text_input("Enter Admin Security PIN:", type="password")
+        login_submitted = st.form_submit_button("Access Console 🔓")
+    
+    if login_submitted or pin == "admin2026":
+        if pin == "admin2026":
+            st.success("🔓 Access Granted!")
+            st.subheader("📊 Platform Financial Metrics")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Active Venues", len(venues))
+            col2.metric("Active Suppliers", len(all_suppliers))
+            col3.metric("Est. Monthly Revenue", f"P{len(venues)*1500 + len(all_suppliers)*500:,.2f}")
+            
+            st.markdown("---")
+            st.subheader("🏢 Registered Venues")
+            st.json(venues)
+            
+            st.subheader("🛍️ Registered Suppliers")
+            st.json(all_suppliers)
+            
+            st.subheader("📅 Stored Customer Bookings")
+            st.json(load_bookings())
+        else:
+            st.error("❌ Incorrect Admin PIN. Please try again.")
 # ---------------------------------------------------------
 # ROUTE 3: CLIENT BOOKING WIZARD (DYNAMIC FOR EACH VENUE)
 # ---------------------------------------------------------
