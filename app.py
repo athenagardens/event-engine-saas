@@ -21,19 +21,24 @@ def save_json(filepath, data):
     with open(filepath, "w") as f:
         json.dump(data, f, indent=4)
 
-# Default Vendor & Event Data
+# Fully Dynamic Initial Configuration Structure
 default_config = {
+    "platform_info": {
+        "platform_name": "EcoVenue Marketplace",
+        "platform_tagline": "Sustainable Venue & Event Service Ecosystem",
+        "primary_theme": "#16A34A"
+    },
     "venues": {
-        "athena": {
-            "business_name": "Athena Gardens & Pavilion",
-            "tagline": "Premier Luxury Outdoor Event Space & Estate",
+        "venue_01": {
+            "business_name": "Botanical Gardens & Estate",
+            "tagline": "Premier Outdoor Luxury Event Space",
             "phone": "+267 71 234 567",
             "password": "pass",
-            "brand_color": "#0F172A",
+            "brand_color": "#15803D",
             "packages": [
                 {"id": "p1", "name": "Main Lawn Space", "price": 5000.0, "unit": "Per Day", "desc": "Exclusive full-day access to main grounds."},
                 {"id": "p2", "name": "Small Group Pavilion (Up to 30)", "price": 2500.0, "unit": "Per Day", "desc": "Space for intimate gatherings."},
-                {"id": "p3", "name": "Bridal Suite Rental", "price": 1200.0, "unit": "Per Unit", "desc": "Private room for bridal party prep."}
+                {"id": "p3", "name": "Bridal Suite Rental", "price": 1200.0, "unit": "Per Unit", "desc": "Private room for party preparation."}
             ],
             "ticketed_events": [
                 {
@@ -43,21 +48,22 @@ default_config = {
                     "flyer_headline": "Live Acoustic & Culinary Event",
                     "ticket_types": [
                         {"type": "General Admission", "price": 250.0, "total": 200, "sold": 18},
-                        {"type": "VIP Lounge Pass", "price": 600.0, "total": 50, "sold": 10}
+                        {"type": "VIP Pass", "price": 600.0, "total": 50, "sold": 10}
                     ]
                 }
             ]
         }
     },
     "all_suppliers": {
-        "saina": {
-            "business_name": "Saina Utensils & Event Wellness",
+        "supplier_01": {
+            "business_name": "EcoStyle Catering & Wellness",
             "category": "Catering & Event Styling",
             "phone": "+267 72 987 654",
             "password": "pass",
+            "brand_color": "#22C55E",
             "packages": [
-                {"id": "s1", "name": "Full Buffet & Table Setup", "price": 150.0, "unit": "Per Guest", "desc": "Utensils, premium crockery, and buffet service."},
-                {"id": "s2", "name": "Lounge Wellness Station", "price": 3000.0, "unit": "Per Unit", "desc": "Mobile herbal tea & relaxation setup."}
+                {"id": "s1", "name": "Full Organic Buffet & Table Setup", "price": 150.0, "unit": "Per Guest", "desc": "Sustainable tableware and buffet service."},
+                {"id": "s2", "name": "Herbal Refreshment Station", "price": 3000.0, "unit": "Per Unit", "desc": "Mobile botanical tea & juice station setup."}
             ]
         }
     }
@@ -78,19 +84,20 @@ if "logged_vendor" not in st.session_state:
 
 venues = st.session_state.config_data.get("venues", {})
 all_suppliers = st.session_state.config_data.get("all_suppliers", {})
+platform_info = st.session_state.config_data.get("platform_info", default_config["platform_info"])
 
-# Dynamic Query Parameters Parsing
+# Dynamic Query Parameters
 query_params = st.query_params
 active_vendor_slug = query_params.get("vendor", None)
 active_event_id = query_params.get("event", None)
 active_venue = venues.get(active_vendor_slug) if active_vendor_slug in venues else None
 
-primary_color = active_venue.get("brand_color", "#0F172A") if active_venue else "#0F172A"
+primary_color = active_venue.get("brand_color", platform_info.get("primary_theme", "#16A34A")) if active_venue else platform_info.get("primary_theme", "#16A34A")
 
-st.set_page_config(page_title="Saina Enterprise | Event Management Platform", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title=f"{platform_info.get('platform_name')} | Platform", layout="wide", initial_sidebar_state="expanded")
 
 # ==============================================================================
-# PROFESSIONAL ENTERPRISE CSS & UNIFORM SIDEBAR MENU STYLING
+# LIGHT GREEN THEME DESIGN SYSTEM & UNIFORM SIDEBAR
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -98,42 +105,38 @@ st.markdown(f"""
     
     html, body, [class*="css"] {{
         font-family: 'Plus Jakarta Sans', sans-serif;
-        color: #0F172A;
-        background-color: #F8FAFC;
+        color: #14532D;
+        background-color: #F0FDF4;
     }}
 
     /* Sidebar Container Box */
     [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%) !important;
-        border-right: 1px solid #334155;
+        background: linear-gradient(180deg, #14532D 0%, #166534 100%) !important;
+        border-right: 1px solid #22C55E;
     }}
 
     [data-testid="stSidebar"] * {{
-        color: #F8FAFC !important;
+        color: #F0FDF4 !important;
     }}
 
-    /* Hide default radio header label to control spacing manually */
-    [data-testid="stSidebar"] [data-testid="stRadio"] > label {{
+    /* Hide default radio header label */
+    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] {{
         display: none !important;
     }}
 
-    /* Sidebar Radio Widget Group Container */
-    [data-testid="stSidebar"] [data-testid="stRadio"] {{
-        width: 100% !important;
-    }}
-
-    /* Flexbox layout for menu items with equal spacing */
-    [data-testid="stSidebar"] [data-testid="stRadio"] > div {{
-        width: 100% !important;
+    /* Sidebar Radio Flex Group Container */
+    [data-testid="stSidebar"] [data-testid="stRadio"] > div[role="radiogroup"] {{
         display: flex !important;
         flex-direction: column !important;
-        gap: 12px !important; /* Uniform exact space between all menu bars */
+        gap: 12px !important;
+        margin-top: 0px !important;
+        padding-top: 0px !important;
     }}
 
-    /* Individual Navigation Buttons (Centered & Identical Height/Width) */
+    /* Individual Navigation Buttons */
     [data-testid="stSidebar"] [data-testid="stRadio"] label {{
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
         border-radius: 8px !important;
         padding: 0 16px !important;
         height: 52px !important;
@@ -147,17 +150,13 @@ st.markdown(f"""
         transition: background 0.2s ease-in-out;
     }}
 
-    /* Hover & Active States */
+    /* Hover State */
     [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
-        background: rgba(255, 255, 255, 0.12) !important;
-        border-color: rgba(255, 255, 255, 0.25) !important;
+        background: rgba(255, 255, 255, 0.2) !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
     }}
 
-    /* Alignment & Text Centering */
-    [data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
-        margin-right: 8px !important;
-    }}
-
+    /* Text Centering inside Radio Buttons */
     [data-testid="stSidebar"] [data-testid="stRadio"] label > div:nth-child(2) p {{
         font-size: 0.92rem !important;
         font-weight: 600 !important;
@@ -165,14 +164,14 @@ st.markdown(f"""
         margin: 0 !important;
     }}
     
-    /* Main Header Container */
+    /* Dynamic Hero Banner Container */
     .hero-header {{
-        background: linear-gradient(135deg, {primary_color} 0%, #1E293B 100%);
+        background: linear-gradient(135deg, {primary_color} 0%, #14532D 100%);
         padding: 2rem;
         border-radius: 12px;
         color: #FFFFFF;
         margin-bottom: 2rem;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.15);
     }}
     .hero-header h1 {{
         color: #FFFFFF !important;
@@ -180,7 +179,7 @@ st.markdown(f"""
         margin-bottom: 0.25rem;
     }}
     .hero-header p {{
-        color: #94A3B8;
+        color: #DCFCE7;
         font-size: 1rem;
         margin: 0;
     }}
@@ -188,17 +187,17 @@ st.markdown(f"""
     /* Card Panels */
     .custom-card {{
         background-color: #FFFFFF;
-        border: 1px solid #E2E8F0;
+        border: 1px solid #BBF7D0;
         border-radius: 8px;
         padding: 1.25rem;
         margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     }}
     
     /* Promotional Banner Styling */
     .flyer-container {{
-        background: linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%);
-        border: 1px solid #4F46E5;
+        background: linear-gradient(135deg, #14532D 0%, #166534 100%);
+        border: 1px solid #22C55E;
         border-radius: 12px;
         padding: 2rem;
         color: #FFFFFF;
@@ -206,7 +205,7 @@ st.markdown(f"""
         margin: 1.5rem 0;
     }}
 
-    /* Standardized Buttons */
+    /* Buttons */
     .stButton>button {{
         background-color: {primary_color} !important;
         color: #FFFFFF !important;
@@ -216,11 +215,11 @@ st.markdown(f"""
         padding: 0.5rem 1.25rem !important;
     }}
     
-    /* Invoice Box */
+    /* Invoice Card */
     .invoice-card {{
         background-color: #FFFFFF;
-        border: 1px solid #CBD5E1;
-        border-left: 5px solid #22C55E;
+        border: 1px solid #A7F3D0;
+        border-left: 5px solid #16A34A;
         border-radius: 8px;
         padding: 1.5rem;
         margin-top: 1.5rem;
@@ -229,15 +228,21 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# NAVIGATION SIDEBAR
+# DYNAMIC NAVIGATION SIDEBAR
 # ==============================================================================
 with st.sidebar:
-    st.markdown("### **SAINA ENTERPRISE**")
-    st.caption("Venue & Service Management System")
+    st.markdown(f"### **{platform_info.get('platform_name', 'PLATFORM').upper()}**")
+    st.caption(platform_info.get("platform_tagline", "Event Management Platform"))
     st.markdown("---")
     
-    # Custom Header text with extra spacing below it before the first menu item
-    st.markdown("<p style='font-weight:700; font-size:0.85rem; letter-spacing:0.05em; margin-bottom:18px;'>NAVIGATION MENU</p>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div style="font-weight: 700; font-size: 0.85rem; letter-spacing: 0.05em; margin-bottom: 12px; color: #DCFCE7;">
+            NAVIGATION MENU
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
     
     route = st.radio(
         "NAVIGATION MENU", 
@@ -248,19 +253,19 @@ with st.sidebar:
     st.markdown("---")
     
     if active_venue:
-        st.info(f"Active Portal:\n**{active_venue['business_name']}**")
+        st.info(f"Active Portal:\n**{active_venue.get('business_name')}**")
         if st.button("Reset Portal Selection"):
             st.query_params.clear()
             st.rerun()
 
 # ==============================================================================
-# ROUTE 1: CUSTOMER MARKETPLACE (BOOKINGS & TICKET PAYMENTS)
+# ROUTE 1: CUSTOMER MARKETPLACE
 # ==============================================================================
 if route == "Customer Marketplace":
     if not active_venue:
-        st.markdown("""
+        st.markdown(f"""
         <div class="hero-header">
-            <h1>Venue & Service Directory</h1>
+            <h1>{platform_info.get('platform_name')} Marketplace</h1>
             <p>Select a partner venue to manage bookings or purchase event tickets.</p>
         </div>
         """, unsafe_allow_html=True)
@@ -271,12 +276,13 @@ if route == "Customer Marketplace":
             cols = st.columns(2)
             for idx, (slug, vdata) in enumerate(venues.items()):
                 with cols[idx % 2]:
+                    v_color = vdata.get('brand_color', '#16A34A')
                     st.markdown(f"""
                     <div class="custom-card">
-                        <strong style="color:#4F46E5; font-size:0.8rem; text-transform:uppercase;">Verified Partner</strong>
-                        <h3 style="margin: 0.2rem 0 0.5rem 0; color:#0F172A;">{vdata.get('business_name')}</h3>
-                        <p style="color:#64748B; font-size:0.9rem; margin-bottom: 0.75rem;">{vdata.get('tagline', '')}</p>
-                        <p style="font-size:0.85rem; color:#334155;"><strong>Contact:</strong> {vdata.get('phone', 'N/A')}</p>
+                        <strong style="color:{v_color}; font-size:0.8rem; text-transform:uppercase;">Verified Partner</strong>
+                        <h3 style="margin: 0.2rem 0 0.5rem 0; color:#14532D;">{vdata.get('business_name')}</h3>
+                        <p style="color:#166534; font-size:0.9rem; margin-bottom: 0.75rem;">{vdata.get('tagline', '')}</p>
+                        <p style="font-size:0.85rem; color:#15803D;"><strong>Contact:</strong> {vdata.get('phone', 'N/A')}</p>
                     </div>
                     """, unsafe_allow_html=True)
                     if st.button(f"Access {vdata.get('business_name')}", key=f"nav_{slug}"):
@@ -292,7 +298,7 @@ if route == "Customer Marketplace":
         
         tab_tickets, tab_book, tab_info = st.tabs(["Event Tickets", "Reserve Venue", "Venue Details"])
         
-        # --- TICKETING SECTION ---
+        # --- TICKETING ---
         with tab_tickets:
             st.markdown("### Scheduled Events")
             events_list = active_venue.get("ticketed_events", [])
@@ -312,8 +318,8 @@ if route == "Customer Marketplace":
                             st.markdown(f"""
                             <div class="flyer-container">
                                 <h2 style="margin:0;">{evt['event_name']}</h2>
-                                <p style="color:#C7D2FE; margin-top:0.5rem;">{evt.get('flyer_headline')}</p>
-                                <hr style="border:0.5px solid rgba(255,255,255,0.15); margin: 1rem 0;">
+                                <p style="color:#DCFCE7; margin-top:0.5rem;">{evt.get('flyer_headline')}</p>
+                                <hr style="border:0.5px solid rgba(255,255,255,0.2); margin: 1rem 0;">
                                 <p style="margin:0; font-size:0.9rem;">Venue: {active_venue.get('business_name')} | Date: {evt['event_date']}</p>
                             </div>
                             """, unsafe_allow_html=True)
@@ -328,8 +334,8 @@ if route == "Customer Marketplace":
                                 st.markdown(f"""
                                 <div class="custom-card" style="text-align:center;">
                                     <strong>{tt['type']}</strong>
-                                    <h3 style="color:#4F46E5; margin:0.5rem 0;">BWP {tt['price']:,.2f}</h3>
-                                    <span style="color:#64748B; font-size:0.8rem;">Available: {remaining}/{tt['total']}</span>
+                                    <h3 style="color:#16A34A; margin:0.5rem 0;">BWP {tt['price']:,.2f}</h3>
+                                    <span style="color:#15803D; font-size:0.8rem;">Available: {remaining}/{tt['total']}</span>
                                 </div>
                                 """, unsafe_allow_html=True)
                                 
@@ -380,7 +386,7 @@ if route == "Customer Marketplace":
                                     st.markdown(f"""
                                     <div class="invoice-card">
                                         <h4>OFFICIAL TICKET RECEIPT</h4>
-                                        <hr style="border:0.5px solid #E2E8F0; margin:0.75rem 0;">
+                                        <hr style="border:0.5px solid #BBF7D0; margin:0.75rem 0;">
                                         <p><strong>Reference:</strong> {t_inv} | <strong>Date:</strong> {str(datetime.date.today())}</p>
                                         <p><strong>Attendee:</strong> {t_client_name} ({t_client_phone})</p>
                                         <p><strong>Event:</strong> {evt['event_name']} | <strong>Date:</strong> {evt['event_date']}</p>
@@ -391,7 +397,7 @@ if route == "Customer Marketplace":
                                 else:
                                     st.error("Attendee details required.")
 
-        # --- RESERVATION ENGINE ---
+        # --- RESERVATIONS ---
         with tab_book:
             st.markdown("### Venue Booking Engine")
             
@@ -476,7 +482,7 @@ if route == "Customer Marketplace":
                         st.markdown(f"""
                         <div class="invoice-card">
                             <h4>TAX INVOICE</h4>
-                            <hr style="border:0.5px solid #E2E8F0; margin:0.75rem 0;">
+                            <hr style="border:0.5px solid #BBF7D0; margin:0.75rem 0;">
                             <p><strong>Invoice Reference:</strong> {inv_id} | <strong>Date:</strong> {str(datetime.date.today())}</p>
                             <p><strong>Client:</strong> {client_name} ({client_phone})</p>
                             <p><strong>Event Date:</strong> {event_date} | <strong>Guests:</strong> {guest_count}</p>
@@ -499,7 +505,7 @@ elif route == "Vendor Dashboard":
     st.markdown("""
     <div class="hero-header">
         <h1>Vendor Management Portal</h1>
-        <p>Review account financial statements, catalog items, and active event listings.</p>
+        <p>Manage account branding, financial statements, and event listings.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -536,14 +542,14 @@ elif route == "Vendor Dashboard":
 
         st.markdown("---")
         
-        tab_list = ["Financial Statements", "Catalog Management"]
+        tab_list = ["Financial Statements", "Catalog & Branding"]
         if v_type == "Venue Owner":
             tab_list.append("Event Management")
             tab_list.append("Promotional Link Builder")
             
         tabs = st.tabs(tab_list)
         
-        # --- TAB 1: LEDGER ---
+        # --- TAB 1: FINANCIALS ---
         with tabs[0]:
             st.markdown("#### Transaction Ledger (90% Payout)")
             
@@ -586,9 +592,29 @@ elif route == "Vendor Dashboard":
             else:
                 st.info("No transactions logged.")
 
-        # --- TAB 2: CATALOG ---
+        # --- TAB 2: CATALOG & DYNAMIC BRANDING ---
         with tabs[1]:
-            st.markdown("#### Active Service Listings")
+            st.markdown("#### Dynamic Account Branding")
+            with st.form("edit_branding_form"):
+                b_name = st.text_input("Business Name:", value=account.get("business_name", ""))
+                b_tag = st.text_input("Tagline / Service Category:", value=account.get("tagline", account.get("category", "")))
+                b_phone = st.text_input("Phone Number:", value=account.get("phone", ""))
+                b_color = st.color_picker("Custom Brand Theme Accent:", value=account.get("brand_color", "#16A34A"))
+                
+                if st.form_submit_button("Update Brand Settings"):
+                    account["business_name"] = b_name
+                    if v_type == "Venue Owner":
+                        account["tagline"] = b_tag
+                    else:
+                        account["category"] = b_tag
+                    account["phone"] = b_phone
+                    account["brand_color"] = b_color
+                    save_json(CONFIG_FILE, st.session_state.config_data)
+                    st.success("Branding details updated successfully!")
+                    st.rerun()
+
+            st.markdown("---")
+            st.markdown("#### Active Service Packages")
             current_pkgs = account.get("packages", [])
             if current_pkgs:
                 st.table(pd.DataFrame(current_pkgs))
@@ -694,8 +720,8 @@ elif route == "Vendor Dashboard":
                     st.markdown(f"""
                     <div class="flyer-container">
                         <h2 style="margin:0;">{sel_evt['event_name']}</h2>
-                        <p style="color:#C7D2FE; margin-top:0.5rem;">{f_headline}</p>
-                        <hr style="border:0.5px solid rgba(255,255,255,0.15); margin: 1rem 0;">
+                        <p style="color:#DCFCE7; margin-top:0.5rem;">{f_headline}</p>
+                        <hr style="border:0.5px solid rgba(255,255,255,0.2); margin: 1rem 0;">
                         <p style="margin:0; font-size:0.9rem;">Venue: {account.get('business_name')} | Date: {sel_evt['event_date']}</p>
                     </div>
                     """, unsafe_allow_html=True)
@@ -710,7 +736,7 @@ elif route == "Partner Onboarding":
     st.markdown("""
     <div class="hero-header">
         <h1>Partner Onboarding</h1>
-        <p>Register a new venue or supplier account on the platform.</p>
+        <p>Register a new venue or service supplier account on the platform.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -724,9 +750,10 @@ elif route == "Partner Onboarding":
         
         if reg_type == "Venue Partner":
             r_tagline = st.text_input("Venue Tagline:")
-            r_color = st.color_picker("Brand Color:", "#0F172A")
+            r_color = st.color_picker("Brand Theme Color:", "#16A34A")
         else:
-            r_cat = st.selectbox("Service Category:", ["Catering & Buffets", "Decor & Event Styling", "Utensils & Equipment Rental", "Wellness Services"])
+            r_cat = st.selectbox("Service Category:", ["Catering & Buffets", "Decor & Event Styling", "Equipment Rental", "Wellness Services"])
+            r_color = st.color_picker("Brand Theme Color:", "#22C55E")
             
         if st.form_submit_button("Submit Registration"):
             if r_id and r_name and r_pass:
@@ -738,7 +765,7 @@ elif route == "Partner Onboarding":
                 else:
                     st.session_state.config_data["all_suppliers"][r_id] = {
                         "business_name": r_name, "category": r_cat, "phone": r_phone,
-                        "password": r_pass, "packages": []
+                        "password": r_pass, "brand_color": r_color, "packages": []
                     }
                 save_json(CONFIG_FILE, st.session_state.config_data)
                 st.success(f"Registered '{r_name}'.")
@@ -752,7 +779,7 @@ elif route == "Master Administration":
     st.markdown("""
     <div class="hero-header">
         <h1>System Administration</h1>
-        <p>Platform billing metrics, transaction ledgers, and account controls.</p>
+        <p>Platform branding, billing metrics, and account controls.</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -760,6 +787,25 @@ elif route == "Master Administration":
     
     if pin == "admin2026":
         st.success("Admin Access Granted")
+        
+        # --- PLATFORM BRANDING SETTINGS ---
+        st.markdown("#### Global Platform Settings")
+        with st.form("platform_branding_form"):
+            p_name = st.text_input("Platform Name:", value=platform_info.get("platform_name", ""))
+            p_tag = st.text_input("Platform Tagline:", value=platform_info.get("platform_tagline", ""))
+            p_theme = st.color_picker("Global Primary Theme Color:", value=platform_info.get("primary_theme", "#16A34A"))
+            
+            if st.form_submit_button("Update System Settings"):
+                st.session_state.config_data["platform_info"] = {
+                    "platform_name": p_name,
+                    "platform_tagline": p_tag,
+                    "primary_theme": p_theme
+                }
+                save_json(CONFIG_FILE, st.session_state.config_data)
+                st.success("Platform branding updated globally.")
+                st.rerun()
+
+        st.markdown("---")
         
         all_bookings = st.session_state.bookings_data
         all_tickets = st.session_state.ticket_sales_data
