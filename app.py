@@ -26,7 +26,7 @@ default_config = {
     "platform_info": {
         "platform_name": "Event Management Platform",
         "platform_tagline": "Venue & Event Service Ecosystem",
-        "primary_theme": "#1E40AF"
+        "primary_theme": "#0284C7"
     },
     "venues": {
         "venue_01": {
@@ -34,7 +34,7 @@ default_config = {
             "tagline": "Premier Event Space & Estate",
             "phone": "+267 70 000 000",
             "password": "pass",
-            "brand_color": "#1E40AF",
+            "brand_color": "#0284C7",
             "packages": [
                 {"id": "p1", "name": "Main Event Grounds", "price": 5000.0, "unit": "Per Day", "desc": "Exclusive full-day access to grounds."},
                 {"id": "p2", "name": "Indoor Hall / Pavilion", "price": 2500.0, "unit": "Per Day", "desc": "Space for indoor functions."},
@@ -60,7 +60,7 @@ default_config = {
             "category": "Catering & Event Styling",
             "phone": "+267 70 111 111",
             "password": "pass",
-            "brand_color": "#2563EB",
+            "brand_color": "#0369A1",
             "packages": [
                 {"id": "s1", "name": "Full Buffet & Table Setup", "price": 150.0, "unit": "Per Guest", "desc": "Tableware and full buffet service."},
                 {"id": "s2", "name": "Beverage & Lounge Setup", "price": 3000.0, "unit": "Per Unit", "desc": "Mobile bar and service setup."}
@@ -92,12 +92,12 @@ active_vendor_slug = query_params.get("vendor", None)
 active_event_id = query_params.get("event", None)
 active_venue = venues.get(active_vendor_slug) if active_vendor_slug in venues else None
 
-primary_color = active_venue.get("brand_color", platform_info.get("primary_theme", "#1E40AF")) if active_venue else platform_info.get("primary_theme", "#1E40AF")
+primary_color = active_venue.get("brand_color", platform_info.get("primary_theme", "#0284C7")) if active_venue else platform_info.get("primary_theme", "#0284C7")
 
 st.set_page_config(page_title=f"{platform_info.get('platform_name')} | Platform", layout="wide", initial_sidebar_state="expanded")
 
 # ==============================================================================
-# SLATE & ROYAL BLUE DESIGN SYSTEM (BORDERLESS SIDEBAR MENU)
+# LIGHT BLUE THEME DESIGN SYSTEM
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -105,18 +105,18 @@ st.markdown(f"""
     
     html, body, [class*="css"] {{
         font-family: 'Inter', sans-serif;
-        color: #0F172A;
-        background-color: #F8FAFC;
+        color: #0C4A6E;
+        background-color: #F0F9FF;
     }}
 
-    /* Sidebar Container Box */
+    /* Sidebar Container Box - Soft Ocean Gradient */
     [data-testid="stSidebar"] {{
-        background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%) !important;
-        border-right: 1px solid #334155;
+        background: linear-gradient(180deg, #075985 0%, #0C4A6E 100%) !important;
+        border-right: 1px solid #38BDF8;
     }}
 
     [data-testid="stSidebar"] * {{
-        color: #F8FAFC !important;
+        color: #F0F9FF !important;
     }}
 
     /* Hide default radio header label */
@@ -124,7 +124,7 @@ st.markdown(f"""
         display: none !important;
     }}
 
-    /* Sidebar Radio Container - Removed Box/Borders */
+    /* Sidebar Radio Container - Borderless */
     [data-testid="stSidebar"] [data-testid="stRadio"] {{
         border: none !important;
         background: transparent !important;
@@ -144,10 +144,10 @@ st.markdown(f"""
         background: transparent !important;
     }}
 
-    /* Individual Navigation Buttons (Strict Uniform Dimensions & Centering) */
+    /* Individual Navigation Buttons (Equal Size & Sky Accent) */
     [data-testid="stSidebar"] [data-testid="stRadio"] label {{
-        background: rgba(255, 255, 255, 0.05) !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
         border-radius: 8px !important;
         padding: 0 12px !important;
         height: 52px !important;
@@ -163,8 +163,8 @@ st.markdown(f"""
 
     /* Hover State */
     [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
-        background: rgba(255, 255, 255, 0.15) !important;
-        border-color: rgba(255, 255, 255, 0.3) !important;
+        background: rgba(255, 255, 255, 0.2) !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
     }}
 
     /* Text Alignment inside Menu Buttons */
@@ -186,12 +186,12 @@ st.markdown(f"""
     
     /* Dynamic Hero Banner Container */
     .hero-header {{
-        background: linear-gradient(135deg, {primary_color} 0%, #0F172A 100%);
+        background: linear-gradient(135deg, {primary_color} 0%, #0369A1 100%);
         padding: 2rem;
         border-radius: 12px;
         color: #FFFFFF;
         margin-bottom: 2rem;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
     }}
     .hero-header h1 {{
         color: #FFFFFF !important;
@@ -199,7 +199,7 @@ st.markdown(f"""
         margin-bottom: 0.25rem;
     }}
     .hero-header p {{
-        color: #93C5FD;
+        color: #E0F2FE;
         font-size: 1rem;
         margin: 0;
     }}
@@ -207,17 +207,17 @@ st.markdown(f"""
     /* Card Panels */
     .custom-card {{
         background-color: #FFFFFF;
-        border: 1px solid #E2E8F0;
+        border: 1px solid #BAE6FD;
         border-radius: 8px;
         padding: 1.25rem;
         margin-bottom: 1rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 4px rgba(2, 132, 199, 0.03);
     }}
     
     /* Promotional Banner Styling */
     .flyer-container {{
-        background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%);
-        border: 1px solid #3B82F6;
+        background: linear-gradient(135deg, #0369A1 0%, #0C4A6E 100%);
+        border: 1px solid #38BDF8;
         border-radius: 12px;
         padding: 2rem;
         color: #FFFFFF;
@@ -238,8 +238,8 @@ st.markdown(f"""
     /* Invoice Card */
     .invoice-card {{
         background-color: #FFFFFF;
-        border: 1px solid #BFDBFE;
-        border-left: 5px solid #1E40AF;
+        border: 1px solid #BAE6FD;
+        border-left: 5px solid #0284C7;
         border-radius: 8px;
         padding: 1.5rem;
         margin-top: 1.5rem;
@@ -287,13 +287,13 @@ if route == "Customer Marketplace":
             cols = st.columns(2)
             for idx, (slug, vdata) in enumerate(venues.items()):
                 with cols[idx % 2]:
-                    v_color = vdata.get('brand_color', '#1E40AF')
+                    v_color = vdata.get('brand_color', '#0284C7')
                     st.markdown(f"""
                     <div class="custom-card">
                         <strong style="color:{v_color}; font-size:0.8rem; text-transform:uppercase;">Verified Partner</strong>
-                        <h3 style="margin: 0.2rem 0 0.5rem 0; color:#0F172A;">{vdata.get('business_name')}</h3>
-                        <p style="color:#475569; font-size:0.9rem; margin-bottom: 0.75rem;">{vdata.get('tagline', '')}</p>
-                        <p style="font-size:0.85rem; color:#334155;"><strong>Contact:</strong> {vdata.get('phone', 'N/A')}</p>
+                        <h3 style="margin: 0.2rem 0 0.5rem 0; color:#0C4A6E;">{vdata.get('business_name')}</h3>
+                        <p style="color:#0369A1; font-size:0.9rem; margin-bottom: 0.75rem;">{vdata.get('tagline', '')}</p>
+                        <p style="font-size:0.85rem; color:#075985;"><strong>Contact:</strong> {vdata.get('phone', 'N/A')}</p>
                     </div>
                     """, unsafe_allow_html=True)
                     if st.button(f"Access {vdata.get('business_name')}", key=f"nav_{slug}"):
@@ -329,7 +329,7 @@ if route == "Customer Marketplace":
                             st.markdown(f"""
                             <div class="flyer-container">
                                 <h2 style="margin:0;">{evt['event_name']}</h2>
-                                <p style="color:#93C5FD; margin-top:0.5rem;">{evt.get('flyer_headline')}</p>
+                                <p style="color:#E0F2FE; margin-top:0.5rem;">{evt.get('flyer_headline')}</p>
                                 <hr style="border:0.5px solid rgba(255,255,255,0.2); margin: 1rem 0;">
                                 <p style="margin:0; font-size:0.9rem;">Venue: {active_venue.get('business_name')} | Date: {evt['event_date']}</p>
                             </div>
@@ -345,8 +345,8 @@ if route == "Customer Marketplace":
                                 st.markdown(f"""
                                 <div class="custom-card" style="text-align:center;">
                                     <strong>{tt['type']}</strong>
-                                    <h3 style="color:#1E40AF; margin:0.5rem 0;">BWP {tt['price']:,.2f}</h3>
-                                    <span style="color:#475569; font-size:0.8rem;">Available: {remaining}/{tt['total']}</span>
+                                    <h3 style="color:#0284C7; margin:0.5rem 0;">BWP {tt['price']:,.2f}</h3>
+                                    <span style="color:#0369A1; font-size:0.8rem;">Available: {remaining}/{tt['total']}</span>
                                 </div>
                                 """, unsafe_allow_html=True)
                                 
@@ -397,7 +397,7 @@ if route == "Customer Marketplace":
                                     st.markdown(f"""
                                     <div class="invoice-card">
                                         <h4>OFFICIAL TICKET RECEIPT</h4>
-                                        <hr style="border:0.5px solid #BFDBFE; margin:0.75rem 0;">
+                                        <hr style="border:0.5px solid #BAE6FD; margin:0.75rem 0;">
                                         <p><strong>Reference:</strong> {t_inv} | <strong>Date:</strong> {str(datetime.date.today())}</p>
                                         <p><strong>Attendee:</strong> {t_client_name} ({t_client_phone})</p>
                                         <p><strong>Event:</strong> {evt['event_name']} | <strong>Date:</strong> {evt['event_date']}</p>
@@ -493,7 +493,7 @@ if route == "Customer Marketplace":
                         st.markdown(f"""
                         <div class="invoice-card">
                             <h4>TAX INVOICE</h4>
-                            <hr style="border:0.5px solid #BFDBFE; margin:0.75rem 0;">
+                            <hr style="border:0.5px solid #BAE6FD; margin:0.75rem 0;">
                             <p><strong>Invoice Reference:</strong> {inv_id} | <strong>Date:</strong> {str(datetime.date.today())}</p>
                             <p><strong>Client:</strong> {client_name} ({client_phone})</p>
                             <p><strong>Event Date:</strong> {event_date} | <strong>Guests:</strong> {guest_count}</p>
@@ -610,7 +610,7 @@ elif route == "Vendor Dashboard":
                 b_name = st.text_input("Business Name:", value=account.get("business_name", ""))
                 b_tag = st.text_input("Tagline / Service Category:", value=account.get("tagline", account.get("category", "")))
                 b_phone = st.text_input("Phone Number:", value=account.get("phone", ""))
-                b_color = st.color_picker("Custom Brand Theme Accent:", value=account.get("brand_color", "#1E40AF"))
+                b_color = st.color_picker("Custom Brand Theme Accent:", value=account.get("brand_color", "#0284C7"))
                 
                 if st.form_submit_button("Update Brand Settings"):
                     account["business_name"] = b_name
@@ -731,7 +731,7 @@ elif route == "Vendor Dashboard":
                     st.markdown(f"""
                     <div class="flyer-container">
                         <h2 style="margin:0;">{sel_evt['event_name']}</h2>
-                        <p style="color:#93C5FD; margin-top:0.5rem;">{f_headline}</p>
+                        <p style="color:#E0F2FE; margin-top:0.5rem;">{f_headline}</p>
                         <hr style="border:0.5px solid rgba(255,255,255,0.2); margin: 1rem 0;">
                         <p style="margin:0; font-size:0.9rem;">Venue: {account.get('business_name')} | Date: {sel_evt['event_date']}</p>
                     </div>
@@ -761,10 +761,10 @@ elif route == "Partner Onboarding":
         
         if reg_type == "Venue Partner":
             r_tagline = st.text_input("Venue Tagline:")
-            r_color = st.color_picker("Brand Theme Color:", "#1E40AF")
+            r_color = st.color_picker("Brand Theme Color:", "#0284C7")
         else:
             r_cat = st.selectbox("Service Category:", ["Catering & Buffets", "Decor & Event Styling", "Equipment Rental", "Wellness Services"])
-            r_color = st.color_picker("Brand Theme Color:", "#2563EB")
+            r_color = st.color_picker("Brand Theme Color:", "#0369A1")
             
         if st.form_submit_button("Submit Registration"):
             if r_id and r_name and r_pass:
@@ -804,7 +804,7 @@ elif route == "Master Administration":
         with st.form("platform_branding_form"):
             p_name = st.text_input("Platform Name:", value=platform_info.get("platform_name", ""))
             p_tag = st.text_input("Platform Tagline:", value=platform_info.get("platform_tagline", ""))
-            p_theme = st.color_picker("Global Primary Theme Color:", value=platform_info.get("primary_theme", "#1E40AF"))
+            p_theme = st.color_picker("Global Primary Theme Color:", value=platform_info.get("primary_theme", "#0284C7"))
             
             if st.form_submit_button("Update System Settings"):
                 st.session_state.config_data["platform_info"] = {
