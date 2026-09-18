@@ -44,6 +44,14 @@ config_data = load_config()
 venues = config_data.get("venues", {})
 all_suppliers = config_data.get("suppliers", {})
 
+# PRE-CALCULATE ACTIVE/PAID SUPPLIERS (FIXES LINE 344 SCOPE ERROR)
+today_str = datetime.date.today().strftime("%Y-%m-%d")
+active_suppliers = {}
+for s_id, sup in all_suppliers.items():
+    sub = sup.get("subscription", {})
+    if sub.get("status") == "ACTIVE" and sub.get("paid_until", "") >= today_str:
+        active_suppliers[s_id] = sup
+
 # 2. GLOBAL ROUTING (URL Queries & Sidebar Navigation)
 query_params = st.query_params
 active_venue_id = query_params.get("vendor", "athena")
@@ -151,16 +159,8 @@ else:
         "logo_file": "https://raw.githubusercontent.com/athenagardens/event-engine-saas/main/logos/athena_logo.png",
         "whatsapp": "26774501880",
         "venue_catalog": [{"item_name": "Standard Garden Lawn", "price": 5000.00, "unit": "Per Day"}],
-        "partner_suppliers": list(all_suppliers.keys())
+        "partner_suppliers": list(active_suppliers.keys())
     })
-
-    # Filter Active Paid Suppliers
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    active_suppliers = {}
-    for s_id, sup in all_suppliers.items():
-        sub = sup.get("subscription", {})
-        if sub.get("status") == "ACTIVE" and sub.get("paid_until", "") >= today_str:
-            active_suppliers[s_id] = sup
 
     # Session State Setup
     if "step" not in st.session_state:
@@ -341,4 +341,4 @@ else:
             if st.button("🔄 Start New Booking"):
                 st.session_state.step = 1
                 st.session_state.cart = []
-                st.rerun()! This date is now locked in the calendar.")
+                st.rerun()
