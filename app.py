@@ -21,34 +21,34 @@ def save_json(filepath, data):
     with open(filepath, "w") as f:
         json.dump(data, f, indent=4)
 
-# Fully Dynamic Initial Configuration Structure
+# Completely Generic Default Data
 default_config = {
     "platform_info": {
-        "platform_name": "Event Venue Platform",
-        "platform_tagline": "Integrated Venue & Event Service Ecosystem",
+        "platform_name": "Event Management Platform",
+        "platform_tagline": "Venue & Event Service Ecosystem",
         "primary_theme": "#1E40AF"
     },
     "venues": {
         "venue_01": {
-            "business_name": "Grand Premier Estate",
-            "tagline": "Exclusive Luxury Event Space",
-            "phone": "+267 71 234 567",
+            "business_name": "Partner Venue A",
+            "tagline": "Premier Event Space & Estate",
+            "phone": "+267 70 000 000",
             "password": "pass",
             "brand_color": "#1E40AF",
             "packages": [
-                {"id": "p1", "name": "Main Lawn Space", "price": 5000.0, "unit": "Per Day", "desc": "Exclusive full-day access to main grounds."},
-                {"id": "p2", "name": "Small Group Pavilion (Up to 30)", "price": 2500.0, "unit": "Per Day", "desc": "Space for intimate gatherings."},
-                {"id": "p3", "name": "Bridal Suite Rental", "price": 1200.0, "unit": "Per Unit", "desc": "Private room for party preparation."}
+                {"id": "p1", "name": "Main Event Grounds", "price": 5000.0, "unit": "Per Day", "desc": "Exclusive full-day access to grounds."},
+                {"id": "p2", "name": "Indoor Hall / Pavilion", "price": 2500.0, "unit": "Per Day", "desc": "Space for indoor functions."},
+                {"id": "p3", "name": "VIP Prep Suite Rental", "price": 1200.0, "unit": "Per Unit", "desc": "Private room for host preparation."}
             ],
             "ticketed_events": [
                 {
                     "event_id": "evt_101",
-                    "event_name": "Summer Gala & Acoustic Evening",
+                    "event_name": "Annual Community Gala",
                     "event_date": "2026-11-15",
-                    "flyer_headline": "Live Music & Fine Dining Experience",
+                    "flyer_headline": "Live Music & Catering Event",
                     "ticket_types": [
-                        {"type": "General Admission", "price": 250.0, "total": 200, "sold": 18},
-                        {"type": "VIP Pass", "price": 600.0, "total": 50, "sold": 10}
+                        {"type": "General Admission", "price": 250.0, "total": 200, "sold": 0},
+                        {"type": "VIP Pass", "price": 600.0, "total": 50, "sold": 0}
                     ]
                 }
             ]
@@ -56,14 +56,14 @@ default_config = {
     },
     "all_suppliers": {
         "supplier_01": {
-            "business_name": "Apex Catering & Event Decor",
+            "business_name": "Service Provider A",
             "category": "Catering & Event Styling",
-            "phone": "+267 72 987 654",
+            "phone": "+267 70 111 111",
             "password": "pass",
             "brand_color": "#2563EB",
             "packages": [
-                {"id": "s1", "name": "Full Buffet & Table Setup", "price": 150.0, "unit": "Per Guest", "desc": "Premium tableware and buffet service."},
-                {"id": "s2", "name": "Cocktail & Beverage Station", "price": 3000.0, "unit": "Per Unit", "desc": "Mobile bar and service team."}
+                {"id": "s1", "name": "Full Buffet & Table Setup", "price": 150.0, "unit": "Per Guest", "desc": "Tableware and full buffet service."},
+                {"id": "s2", "name": "Beverage & Lounge Setup", "price": 3000.0, "unit": "Per Unit", "desc": "Mobile bar and service setup."}
             ]
         }
     }
@@ -97,7 +97,7 @@ primary_color = active_venue.get("brand_color", platform_info.get("primary_theme
 st.set_page_config(page_title=f"{platform_info.get('platform_name')} | Platform", layout="wide", initial_sidebar_state="expanded")
 
 # ==============================================================================
-# MODERN BLUE THEME DESIGN SYSTEM & UNIFORM SIDEBAR
+# SLATE & ROYAL BLUE DESIGN SYSTEM (EVENLY SPACED MENU BARS)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -119,7 +119,7 @@ st.markdown(f"""
         color: #F8FAFC !important;
     }}
 
-    /* Hide default radio header label completely */
+    /* Hide default radio header label */
     [data-testid="stSidebar"] [data-testid="stWidgetLabel"] {{
         display: none !important;
     }}
@@ -133,13 +133,13 @@ st.markdown(f"""
         padding-top: 0px !important;
     }}
 
-    /* Individual Navigation Buttons - Pixel Perfect Uniform Height */
+    /* Individual Navigation Buttons (Strict Uniform Dimensions & Centering) */
     [data-testid="stSidebar"] [data-testid="stRadio"] label {{
         background: rgba(255, 255, 255, 0.05) !important;
         border: 1px solid rgba(255, 255, 255, 0.12) !important;
         border-radius: 8px !important;
         padding: 0 12px !important;
-        height: 52px !important; /* Uniform height for all items */
+        height: 52px !important;
         width: 100% !important;
         display: flex !important;
         align-items: center !important;
@@ -156,7 +156,7 @@ st.markdown(f"""
         border-color: rgba(255, 255, 255, 0.3) !important;
     }}
 
-    /* Equalize Text Alignment and Padding Inside Menu Buttons */
+    /* Text Alignment inside Menu Buttons */
     [data-testid="stSidebar"] [data-testid="stRadio"] label > div:nth-child(2) {{
         width: 100% !important;
         display: flex !important;
