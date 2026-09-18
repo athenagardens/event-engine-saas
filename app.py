@@ -90,7 +90,7 @@ primary_color = active_venue.get("brand_color", "#0F172A") if active_venue else 
 st.set_page_config(page_title="Saina Enterprise | Event Management Platform", layout="wide", initial_sidebar_state="expanded")
 
 # ==============================================================================
-# PROFESSIONAL ENTERPRISE CSS & SIDEBAR COLOR STYLING
+# PROFESSIONAL ENTERPRISE CSS & UNIFORM SIDEBAR MENU STYLING
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -110,13 +110,25 @@ st.markdown(f"""
     [data-testid="stSidebar"] * {{
         color: #F8FAFC !important;
     }}
+    
+    /* Uniform Fixed Height & Width for Sidebar Menu Items */
+    [data-testid="stSidebar"] .stRadio > div {{
+        gap: 8px;
+    }}
     [data-testid="stSidebar"] .stRadio label {{
         background: rgba(255, 255, 255, 0.05);
-        padding: 8px 12px;
-        border-radius: 6px;
-        margin-bottom: 4px;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        display: block;
+        border-radius: 6px;
+        padding: 0 16px !important;
+        height: 48px !important;
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        margin-bottom: 0px !important;
+    }}
+    [data-testid="stSidebar"] .stRadio label:hover {{
+        background: rgba(255, 255, 255, 0.1);
     }}
     
     /* Main Header Container */
@@ -763,5 +775,4 @@ elif route == "Master Administration":
                     del st.session_state.config_data["all_suppliers"][s_del]
                     save_json(CONFIG_FILE, st.session_state.config_data)
                     st.success(f"Removed '{s_del}'")
-                    st.rerun()
                     st.rerun()
