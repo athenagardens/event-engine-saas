@@ -21,7 +21,7 @@ def save_json(filepath, data):
     with open(filepath, "w") as f:
         json.dump(data, f, indent=4)
 
-# Completely Generic Default Data
+# Completely Generic Default Data Structure
 default_config = {
     "platform_info": {
         "platform_name": "Event Management Platform",
@@ -82,11 +82,12 @@ if "ticket_sales_data" not in st.session_state:
 if "logged_vendor" not in st.session_state:
     st.session_state.logged_vendor = None
 
+# Safely extraction of dictionary keys
 venues = st.session_state.config_data.get("venues", {})
 all_suppliers = st.session_state.config_data.get("all_suppliers", {})
 platform_info = st.session_state.config_data.get("platform_info", default_config["platform_info"])
 
-# Dynamic Query Parameters
+# Dynamic Query Parameters Parsing
 query_params = st.query_params
 active_vendor_slug = query_params.get("vendor", None)
 active_event_id = query_params.get("event", None)
@@ -109,7 +110,7 @@ st.markdown(f"""
         background-color: #F0F9FF;
     }}
 
-    /* Sidebar Container Box - Soft Ocean Gradient */
+    /* Sidebar Container Box */
     [data-testid="stSidebar"] {{
         background: linear-gradient(180deg, #075985 0%, #0C4A6E 100%) !important;
         border-right: 1px solid #38BDF8;
@@ -144,7 +145,7 @@ st.markdown(f"""
         background: transparent !important;
     }}
 
-    /* Individual Navigation Buttons (Equal Size & Sky Accent) */
+    /* Individual Navigation Buttons */
     [data-testid="stSidebar"] [data-testid="stRadio"] label {{
         background: rgba(255, 255, 255, 0.08) !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
