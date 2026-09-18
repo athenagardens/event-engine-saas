@@ -6,6 +6,7 @@ import pandas as pd
 import uuid
 import qrcode
 import io
+import urllib.parse
 
 # ==============================================================================
 # CONFIGURATION & PERSISTENCE
@@ -36,6 +37,10 @@ default_config = {
             "business_name": "Partner Venue A",
             "tagline": "Premier Event Space & Estate",
             "phone": "+267 70 000 000",
+            "whatsapp_phone": "+267 70 000 000",
+            "contact_person": "Operations Manager",
+            "location_address": "Gaborone, Botswana",
+            "logo_url": "https://via.placeholder.com/150",
             "password": "pass",
             "brand_color": "#0284C7",
             "packages": [
@@ -48,7 +53,10 @@ default_config = {
                     "event_id": "evt_101",
                     "event_name": "Annual Community Gala",
                     "event_date": "2026-11-15",
+                    "from_time": "18:00",
+                    "to_time": "23:50",
                     "flyer_headline": "Live Music & Catering Event",
+                    "flyer_image_url": "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&w=800&q=80",
                     "ticket_types": [
                         {"type": "General Admission", "price": 250.0, "total": 200, "sold": 0},
                         {"type": "VIP Pass", "price": 600.0, "total": 50, "sold": 0}
@@ -62,6 +70,10 @@ default_config = {
             "business_name": "Service Provider A",
             "category": "Catering & Event Styling",
             "phone": "+267 70 111 111",
+            "whatsapp_phone": "+267 70 111 111",
+            "contact_person": "Lead Coordinator",
+            "location_address": "Gaborone, Botswana",
+            "logo_url": "https://via.placeholder.com/150",
             "password": "pass",
             "brand_color": "#0369A1",
             "packages": [
@@ -112,6 +124,13 @@ def generate_qr_code(text_data):
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+# Helper Function: Google Maps URL Generator
+def get_google_maps_url(address_str):
+    if not address_str or address_str == "N/A":
+        return "https://maps.google.com"
+    encoded_addr = urllib.parse.quote(address_str)
+    return f"https://www.google.com/maps/search/?api=1&query={encoded_addr}"
 
 # ==============================================================================
 # LIGHT BLUE THEME DESIGN SYSTEM
@@ -306,12 +325,14 @@ if route == "Customer Marketplace":
             for idx, (slug, vdata) in enumerate(venues.items()):
                 with cols[idx % 2]:
                     v_color = vdata.get('brand_color', '#0284C7')
+                    
                     st.markdown(f"""
                     <div class="custom-card">
                         <strong style="color:{v_color}; font-size:0.8rem; text-transform:uppercase;">Verified Partner</strong>
                         <h3 style="margin: 0.2rem 0 0.5rem 0; color:#0C4A6E;">{vdata.get('business_name')}</h3>
-                        <p style="color:#0369A1; font-size:0.9rem; margin-bottom: 0.75rem;">{vdata.get('tagline', '')}</p>
-                        <p style="font-size:0.85rem; color:#075985;"><strong>Contact:</strong> {vdata.get('phone', 'N/A')}</p>
+                        <p style="color:#0369A1; font-size:0.9rem; margin-bottom: 0.5rem;">{vdata.get('tagline', '')}</p>
+                        <p style="font-size:0.85rem; color:#075985; margin:0;">📍 {vdata.get('location_address', 'N/A')}</p>
+                        <p style="font-size:0.85rem; color:#075985; margin:0;">👤 Contact: {vdata.get('contact_person', 'N/A')} ({vdata.get('phone', 'N/A')})</p>
                     </div>
                     """, unsafe_allow_html=True)
                     if st.button(f"Access {vdata.get('business_name')}", key=f"nav_{slug}"):
@@ -341,19 +362,32 @@ if route == "Customer Marketplace":
                     if is_direct_flyer_event:
                         st.success(f"Direct WhatsApp/Flyer link loaded for **{evt['event_name']}**.")
                     
-                    with st.expander(f"{evt['event_name']} — Date: {evt['event_date']}", expanded=is_direct_flyer_event or (len(events_list) == 1)):
+                    event_time_str = f"🕒 {evt.get('from_time', '00:00')} - {evt.get('to_time', '23:59')}" if evt.get('from_time') else ""
+                    
+                    # Calculate Starting Ticket Price for Flyer display
+                    ticket_prices = [tt["price"] for tt in evt.get("ticket_types", [])]
+                    min_price = min(ticket_prices) if ticket_prices else 0.0
+                    
+                    maps_link = get_google_maps_url(active_venue.get("location_address", ""))
+                    
+                    with st.expander(f"{evt['event_name']} — Date: {evt['event_date']} {event_time_str} | From BWP {min_price:,.2f}", expanded=is_direct_flyer_event or (len(events_list) == 1)):
                         
-                        # Interactive Promotional Flyer Banner
+                        # Interactive Promotional Flyer Banner with Embedded Price & Graphic
                         if evt.get("flyer_headline"):
                             st.markdown(f"""
                             <div class="flyer-container">
                                 <span style="background:#38BDF8; color:#0C4A6E; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:700; text-transform:uppercase;">Official Flyer Ad</span>
                                 <h2 style="margin:0.5rem 0 0 0; font-size:1.8rem;">{evt['event_name']}</h2>
                                 <p style="color:#E0F2FE; font-size:1.1rem; margin-top:0.5rem; font-weight:500;">{evt.get('flyer_headline')}</p>
+                                <h3 style="color:#38BDF8; margin:0.5rem 0;">Tickets From: BWP {min_price:,.2f}</h3>
                                 <hr style="border:0.5px solid rgba(255,255,255,0.2); margin: 1rem 0;">
-                                <p style="margin:0; font-size:0.95rem;">📍 <strong>Venue:</strong> {active_venue.get('business_name')} | 📅 <strong>Date:</strong> {evt['event_date']}</p>
+                                <p style="margin:0; font-size:0.95rem;">📍 <strong>Venue:</strong> {active_venue.get('business_name')} (<a href="{maps_link}" target="_blank" style="color:#38BDF8;">{active_venue.get('location_address', 'Main Grounds')} 🗺️</a>)</p>
+                                <p style="margin:0; font-size:0.95rem;">📅 <strong>Date:</strong> {evt['event_date']} | {event_time_str}</p>
                             </div>
                             """, unsafe_allow_html=True)
+
+                        if evt.get("flyer_image_url"):
+                            st.image(evt.get("flyer_image_url"), use_container_width=True, caption=f"Flyer Banner Graphic for {evt['event_name']}")
 
                         st.markdown("#### Select Ticket Tier:")
                         t_cols = st.columns(len(evt["ticket_types"]))
@@ -390,9 +424,7 @@ if route == "Customer Marketplace":
                             
                             if st.button("Process Payment & Issue Secure Tickets", key=f"btn_buy_{evt['event_id']}"):
                                 if t_client_name and t_client_phone:
-                                    # Generate Cryptographically Secure UUID Tokens for Each Individual Ticket
                                     issued_qr_tickets = []
-                                    total_qty_bought = sum(item["qty"] for item in selected_tickets.values())
                                     
                                     for t_name, t_info in selected_tickets.items():
                                         for _ in range(t_info["qty"]):
@@ -401,9 +433,8 @@ if route == "Customer Marketplace":
                                                 "ticket_uuid": secure_uuid,
                                                 "tier": t_name,
                                                 "price": t_info["price"],
-                                                "status": "VALID"  # Statuses: VALID, CHECKED_IN
+                                                "status": "VALID"
                                             })
-                                        # Deduct inventory stock
                                         evt["ticket_types"][t_info["index"]]["sold"] += t_info["qty"]
 
                                     t_inv = f"TCK-{len(st.session_state.ticket_sales_data) + 5001}"
@@ -429,27 +460,48 @@ if route == "Customer Marketplace":
                                     
                                     st.success("Payment Processed! Stock inventory updated.")
                                     
-                                    # Render Receipts & Secure Un-duplicatable QR Passes
                                     st.markdown(f"""
                                     <div class="invoice-card">
                                         <h4>OFFICIAL DIGITAL TICKET PASS</h4>
                                         <hr style="border:0.5px solid #BAE6FD; margin:0.75rem 0;">
                                         <p><strong>Order Ref:</strong> {t_inv} | <strong>Date:</strong> {str(datetime.date.today())}</p>
                                         <p><strong>Attendee:</strong> {t_client_name} ({t_client_phone})</p>
-                                        <p><strong>Event:</strong> {evt['event_name']} | <strong>Date:</strong> {evt['event_date']}</p>
+                                        <p><strong>Event:</strong> {evt['event_name']} | <strong>Date:</strong> {evt['event_date']} ({event_time_str})</p>
                                         <p><strong>Venue:</strong> {active_venue['business_name']}</p>
+                                        <p>📍 <strong>Location Pin:</strong> <a href="{maps_link}" target="_blank">{active_venue.get('location_address', 'Google Maps Link')} 🗺️</a></p>
                                         <p><strong>Total Paid:</strong> BWP {t_total:,.2f}</p>
                                     </div>
                                     """, unsafe_allow_html=True)
                                     
-                                    st.markdown("#### Individual QR Entry Passes (Un-duplicatable)")
+                                    st.markdown("#### Individual Ticket Passes (Un-duplicatable QR)")
                                     qr_cols = st.columns(min(3, len(issued_qr_tickets)))
                                     
                                     for idx_q, t_pass in enumerate(issued_qr_tickets):
                                         with qr_cols[idx_q % 3]:
+                                            if evt.get("flyer_image_url"):
+                                                st.image(evt.get("flyer_image_url"), use_container_width=True)
                                             qr_img_bytes = generate_qr_code(t_pass['ticket_uuid'])
-                                            st.image(qr_img_bytes, caption=f"Tier: {t_pass['tier']}\nUUID: {t_pass['ticket_uuid'][:13]}...", width=180)
+                                            st.image(qr_img_bytes, caption=f"Tier: {t_pass['tier']} (BWP {t_pass['price']:,.2f})\nUUID: {t_pass['ticket_uuid'][:13]}...", width=180)
                                             st.caption(f"Security Code:\n`{t_pass['ticket_uuid']}`")
+
+                                    # WHATSAPP AUTOMATED TICKET DISPATCH
+                                    client_wa = t_client_phone.replace("+", "").replace(" ", "").strip()
+                                    t_msg_text = (
+                                        f"🎟️ *OFFICIAL TICKET CONFIRMATION*\n\n"
+                                        f"Hello *{t_client_name}*,\n"
+                                        f"Your ticket purchase for *{evt['event_name']}* is complete!\n\n"
+                                        f"📋 *Order Ref:* {t_inv}\n"
+                                        f"📅 *Event Date:* {evt['event_date']}\n"
+                                        f"🕒 *Time:* {evt.get('from_time', '')} - {evt.get('to_time', '')}\n"
+                                        f"📍 *Venue:* {active_venue['business_name']}\n"
+                                        f"🗺️ *Google Maps Pin:* {maps_link}\n"
+                                        f"💵 *Total Paid:* BWP {t_total:,.2f}\n\n"
+                                        f"Please present your QR code at the venue entrance."
+                                    )
+                                    t_encoded = urllib.parse.quote(t_msg_text)
+                                    t_wa_url = f"https://wa.me/{client_wa}?text={t_encoded}"
+                                    
+                                    st.markdown(f'<a href="{t_wa_url}" target="_blank" style="text-decoration:none;"><button style="background-color:#22C55E !important; color:white; font-weight:700; padding:10px 20px; border-radius:8px; border:none; cursor:pointer; margin-top:1rem;">📲 Send Ticket & Google Maps Pin via WhatsApp</button></a>', unsafe_allow_html=True)
                                 else:
                                     st.error("Attendee details required.")
 
@@ -462,7 +514,7 @@ if route == "Customer Marketplace":
             with c1:
                 client_name = st.text_input("Client Name:")
                 client_email = st.text_input("Email:")
-                client_phone = st.text_input("Phone Number:")
+                client_phone = st.text_input("Phone Number (WhatsApp):")
             with c2:
                 event_type = st.selectbox("Event Type:", ["Wedding", "Corporate Event", "Private Gathering", "Other"])
                 event_date = st.date_input("Event Date:", min_value=datetime.date.today() + datetime.timedelta(days=1))
@@ -545,14 +597,39 @@ if route == "Customer Marketplace":
                             <p><strong>Deposit Paid:</strong> BWP {deposit:,.2f}</p>
                         </div>
                         """, unsafe_allow_html=True)
+
+                        # WHATSAPP AUTOMATED QUOTE DISPATCH FOR BOOKING
+                        c_wa = client_phone.replace("+", "").replace(" ", "").strip()
+                        items_summary = ", ".join([i['item'] for i in selected_items])
+                        q_msg_text = (
+                            f"📝 *BOOKING RESERVATION QUOTE*\n\n"
+                            f"Hello *{client_name}*,\n"
+                            f"Thank you for booking with *{active_venue['business_name']}*!\n\n"
+                            f"📋 *Invoice Ref:* {inv_id}\n"
+                            f"📅 *Event Date:* {event_date}\n"
+                            f"👥 *Guest Count:* {guest_count}\n"
+                            f"📦 *Selected Packages:* {items_summary}\n"
+                            f"💵 *Grand Total:* BWP {grand_total:,.2f}\n"
+                            f"💳 *50% Deposit Due:* BWP {deposit:,.2f}\n\n"
+                            f"📍 *Venue Location Pin:* {get_google_maps_url(active_venue.get('location_address', ''))}"
+                        )
+                        q_encoded = urllib.parse.quote(q_msg_text)
+                        q_wa_url = f"https://wa.me/{c_wa}?text={q_encoded}"
+                        
+                        st.markdown(f'<a href="{q_wa_url}" target="_blank" style="text-decoration:none;"><button style="background-color:#22C55E !important; color:white; font-weight:700; padding:10px 20px; border-radius:8px; border:none; cursor:pointer; margin-top:1rem;">📲 Send Booking Quote to WhatsApp</button></a>', unsafe_allow_html=True)
                     else:
                         st.error("Client details required.")
             else:
                 st.warning("Select at least one package to proceed.")
 
         with tab_info:
+            maps_pin = get_google_maps_url(active_venue.get('location_address', ''))
             st.markdown(f"### {active_venue.get('business_name')}")
-            st.write(f"Phone Contact: {active_venue.get('phone')}")
+            st.write(f"**Contact Person:** {active_venue.get('contact_person', 'N/A')}")
+            st.write(f"**Phone:** {active_venue.get('phone', 'N/A')}")
+            st.write(f"**WhatsApp:** {active_venue.get('whatsapp_phone', 'N/A')}")
+            st.write(f"**Location / Address:** {active_venue.get('location_address', 'N/A')}")
+            st.markdown(f"🗺️ **[Open Google Maps Pin]({maps_pin})**")
 
 # ==============================================================================
 # ROUTE 2: VENDOR DASHBOARD (MANAGEMENT & GATEKEEPER SCANNER)
@@ -648,25 +725,39 @@ elif route == "Vendor Dashboard":
             else:
                 st.info("No transactions logged.")
 
-        # --- TAB 2: CATALOG & DYNAMIC BRANDING ---
+        # --- TAB 2: CATALOG, BRANDING & COMPANY DETAILS ---
         with tabs[1]:
-            st.markdown("#### Dynamic Account Branding")
+            st.markdown("#### Dynamic Account Branding & Company Details")
             with st.form("edit_branding_form"):
                 b_name = st.text_input("Business Name:", value=account.get("business_name", ""))
                 b_tag = st.text_input("Tagline / Service Category:", value=account.get("tagline", account.get("category", "")))
-                b_phone = st.text_input("Phone Number:", value=account.get("phone", ""))
+                
+                col_c1, col_c2 = st.columns(2)
+                with col_c1:
+                    b_person = st.text_input("Contact Person Name:", value=account.get("contact_person", ""))
+                    b_phone = st.text_input("Primary Telephone:", value=account.get("phone", ""))
+                with col_c2:
+                    b_wa_phone = st.text_input("WhatsApp Marketing Number (With Country Code):", value=account.get("whatsapp_phone", account.get("phone", "")))
+                    b_address = st.text_input("Physical Location / Address:", value=account.get("location_address", ""))
+                
+                b_logo = st.text_input("Company Logo Image URL:", value=account.get("logo_url", ""))
                 b_color = st.color_picker("Custom Brand Theme Accent:", value=account.get("brand_color", "#0284C7"))
                 
-                if st.form_submit_button("Update Brand Settings"):
+                if st.form_submit_button("Update Company Profile & Branding"):
                     account["business_name"] = b_name
                     if v_type == "Venue Owner":
                         account["tagline"] = b_tag
                     else:
                         account["category"] = b_tag
+                    account["contact_person"] = b_person
                     account["phone"] = b_phone
+                    account["whatsapp_phone"] = b_wa_phone
+                    account["location_address"] = b_address
+                    account["logo_url"] = b_logo
                     account["brand_color"] = b_color
+                    
                     save_json(CONFIG_FILE, st.session_state.config_data)
-                    st.success("Branding details updated successfully!")
+                    st.success("Company profile and branding details updated successfully!")
                     st.rerun()
 
             st.markdown("---")
@@ -704,7 +795,8 @@ elif route == "Vendor Dashboard":
                 
                 if v_events:
                     for e in v_events:
-                        st.markdown(f"**{e['event_name']}** | Date: `{e['event_date']}`")
+                        time_display = f" | Time: `{e.get('from_time', '00:00')} - {e.get('to_time', '23:59')}`" if e.get('from_time') else ""
+                        st.markdown(f"**{e['event_name']}** | Date: `{e['event_date']}`{time_display}")
                         st.table(pd.DataFrame(e["ticket_types"]))
                 else:
                     st.info("No events created.")
@@ -742,8 +834,17 @@ elif route == "Vendor Dashboard":
                 
                 with st.form("create_evt_form"):
                     e_name = st.text_input("Event Name:")
-                    e_date = st.date_input("Event Date:", min_value=datetime.date.today())
+                    
+                    col_e1, col_e2, col_e3 = st.columns(3)
+                    with col_e1:
+                        e_date = st.date_input("Event Date:", min_value=datetime.date.today())
+                    with col_e2:
+                        e_from = st.text_input("Start Time (e.g. 18:00):", value="18:00")
+                    with col_e3:
+                        e_to = st.text_input("End Time (e.g. 23:30):", value="23:30")
+
                     e_headline = st.text_input("Promotional Subtitle / Flyer Headline:", value="Live Music & Experience")
+                    e_image = st.text_input("Flyer Image URL (Optional Graphic):", value="")
                     
                     st.markdown("##### Ticket Tier 1:")
                     col_t1, col_t2, col_t3 = st.columns(3)
@@ -773,7 +874,10 @@ elif route == "Vendor Dashboard":
                                 "event_id": f"evt_{len(v_events) + 101}",
                                 "event_name": e_name,
                                 "event_date": str(e_date),
+                                "from_time": e_from,
+                                "to_time": e_to,
                                 "flyer_headline": e_headline,
+                                "flyer_image_url": e_image,
                                 "ticket_types": ticket_types
                             }
                             account.setdefault("ticketed_events", []).append(new_evt)
@@ -781,7 +885,7 @@ elif route == "Vendor Dashboard":
                             st.success(f"Published '{e_name}'.")
                             st.rerun()
 
-            # --- TAB 4: FLYER PROMOTIONAL LINK BUILDER ---
+            # --- TAB 4: FLYER PROMOTIONAL LINK BUILDER & AUTOMATED WHATSAPP SHARING ---
             with tabs[3]:
                 st.markdown("#### WhatsApp & Social Media Flyer Link Builder")
                 
@@ -795,10 +899,17 @@ elif route == "Vendor Dashboard":
                     
                     st.markdown("---")
                     f_headline = st.text_input("Flyer Ad Headline Text:", value=sel_evt.get("flyer_headline", ""))
+                    f_img_url = st.text_input("Flyer Image URL:", value=sel_evt.get("flyer_image_url", ""))
+                    
                     sel_evt["flyer_headline"] = f_headline
+                    sel_evt["flyer_image_url"] = f_img_url
                     save_json(CONFIG_FILE, st.session_state.config_data)
                     
                     direct_link = f"http://localhost:8501/?vendor={v_id}&event={sel_evt['event_id']}"
+                    
+                    # Compute min price for flyer ad
+                    prices = [tt["price"] for tt in sel_evt.get("ticket_types", [])]
+                    min_ad_price = min(prices) if prices else 0.0
                     
                     st.markdown("##### Visual Flyer Ad Preview")
                     st.markdown(f"""
@@ -806,14 +917,38 @@ elif route == "Vendor Dashboard":
                         <span style="background:#38BDF8; color:#0C4A6E; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:700; text-transform:uppercase;">WhatsApp Flyer Ad</span>
                         <h2 style="margin:0.5rem 0 0 0; font-size:1.8rem;">{sel_evt['event_name']}</h2>
                         <p style="color:#E0F2FE; font-size:1.1rem; margin-top:0.5rem;">{f_headline}</p>
+                        <h3 style="color:#38BDF8; margin:0.5rem 0;">Tickets From: BWP {min_ad_price:,.2f}</h3>
                         <hr style="border:0.5px solid rgba(255,255,255,0.2); margin: 1rem 0;">
-                        <p style="margin:0; font-size:0.95rem;">📍 Venue: {account.get('business_name')} | 📅 Date: {sel_evt['event_date']}</p>
+                        <p style="margin:0; font-size:0.95rem;">📍 Venue: {account.get('business_name')} ({account.get('location_address', 'Grounds')})</p>
+                        <p style="margin:0; font-size:0.95rem;">📅 Date: {sel_evt['event_date']} | 🕒 Time: {sel_evt.get('from_time', '00:00')} - {sel_evt.get('to_time', '23:59')}</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
+                    if f_img_url:
+                        st.image(f_img_url, use_container_width=True, caption="Attached Flyer Ad Graphic")
+
                     st.markdown("##### Direct WhatsApp Ad Checkout URL")
-                    st.caption("Share this direct URL in your ad copy. Clicking it opens the flyer ad banner and checkout form directly.")
                     st.code(direct_link, language="markdown")
+                    
+                    # AUTOMATED WHATSAPP SHARE GENERATOR
+                    wa_number = account.get("whatsapp_phone", "").replace("+", "").replace(" ", "").strip()
+                    maps_pin_url = get_google_maps_url(account.get("location_address", ""))
+                    
+                    msg_text = (
+                        f"🎉 *{sel_evt['event_name']}*\n"
+                        f"📢 {f_headline}\n\n"
+                        f"🎟️ *Tickets From:* BWP {min_ad_price:,.2f}\n"
+                        f"📍 *Venue:* {account.get('business_name')} ({account.get('location_address', '')})\n"
+                        f"🗺️ *Google Maps Pin:* {maps_pin_url}\n"
+                        f"📅 *Date:* {sel_evt['event_date']}\n"
+                        f"🕒 *Time:* {sel_evt.get('from_time', '')} - {sel_evt.get('to_time', '')}\n\n"
+                        f"🎟️ *Buy tickets directly here:* {direct_link}"
+                    )
+                    
+                    encoded_msg = urllib.parse.quote(msg_text)
+                    wa_url = f"https://wa.me/{wa_number}?text={encoded_msg}" if wa_number else f"https://wa.me/?text={encoded_msg}"
+                    
+                    st.markdown(f'<a href="{wa_url}" target="_blank" style="text-decoration:none;"><button style="background-color:#22C55E !important; color:white; font-weight:700; padding:10px 20px; border-radius:8px; border:none; cursor:pointer;">📲 Share Flyer Ad directly to WhatsApp</button></a>', unsafe_allow_html=True)
 
 # ==============================================================================
 # ROUTE 3: PARTNER ONBOARDING
@@ -831,7 +966,10 @@ elif route == "Partner Onboarding":
     with st.form("registration_form"):
         r_id = st.text_input("Account Identifier Slug:").strip().lower()
         r_name = st.text_input("Business Name:")
-        r_phone = st.text_input("Phone Number:")
+        r_phone = st.text_input("Primary Phone Number:")
+        r_wa_phone = st.text_input("WhatsApp Marketing Number:", value="+267 ")
+        r_contact = st.text_input("Contact Person Name:")
+        r_address = st.text_input("Physical Location / Address:")
         r_pass = st.text_input("Password:", type="password")
         
         if reg_type == "Venue Partner":
@@ -846,11 +984,15 @@ elif route == "Partner Onboarding":
                 if reg_type == "Venue Partner":
                     st.session_state.config_data.setdefault("venues", {})[r_id] = {
                         "business_name": r_name, "tagline": r_tagline, "phone": r_phone,
+                        "whatsapp_phone": r_wa_phone, "contact_person": r_contact,
+                        "location_address": r_address, "logo_url": "",
                         "password": r_pass, "brand_color": r_color, "packages": [], "ticketed_events": []
                     }
                 else:
                     st.session_state.config_data.setdefault("all_suppliers", {})[r_id] = {
                         "business_name": r_name, "category": r_cat, "phone": r_phone,
+                        "whatsapp_phone": r_wa_phone, "contact_person": r_contact,
+                        "location_address": r_address, "logo_url": "",
                         "password": r_pass, "brand_color": r_color, "packages": []
                     }
                 save_json(CONFIG_FILE, st.session_state.config_data)
