@@ -69,9 +69,14 @@ default_config = {
     }
 }
 
-# Session State Initializations
+# Session State Initializations & Safe Key Verification
 if "config_data" not in st.session_state:
     st.session_state.config_data = load_json(CONFIG_FILE, default_config)
+
+# Ensure essential top-level keys always exist in loaded JSON
+st.session_state.config_data.setdefault("venues", {})
+st.session_state.config_data.setdefault("all_suppliers", {})
+st.session_state.config_data.setdefault("platform_info", default_config["platform_info"])
 
 if "bookings_data" not in st.session_state:
     st.session_state.bookings_data = load_json(BOOKINGS_FILE, [])
@@ -82,7 +87,6 @@ if "ticket_sales_data" not in st.session_state:
 if "logged_vendor" not in st.session_state:
     st.session_state.logged_vendor = None
 
-# Safely extraction of dictionary keys
 venues = st.session_state.config_data.get("venues", {})
 all_suppliers = st.session_state.config_data.get("all_suppliers", {})
 platform_info = st.session_state.config_data.get("platform_info", default_config["platform_info"])
@@ -770,17 +774,18 @@ elif route == "Partner Onboarding":
         if st.form_submit_button("Submit Registration"):
             if r_id and r_name and r_pass:
                 if reg_type == "Venue Partner":
-                    st.session_state.config_data["venues"][r_id] = {
+                    st.session_state.config_data.setdefault("venues", {})[r_id] = {
                         "business_name": r_name, "tagline": r_tagline, "phone": r_phone,
                         "password": r_pass, "brand_color": r_color, "packages": [], "ticketed_events": []
                     }
                 else:
-                    st.session_state.config_data["all_suppliers"][r_id] = {
+                    st.session_state.config_data.setdefault("all_suppliers", {})[r_id] = {
                         "business_name": r_name, "category": r_cat, "phone": r_phone,
                         "password": r_pass, "brand_color": r_color, "packages": []
                     }
                 save_json(CONFIG_FILE, st.session_state.config_data)
                 st.success(f"Registered '{r_name}'.")
+                st.rerun()
             else:
                 st.error("Fill in all required fields.")
 
