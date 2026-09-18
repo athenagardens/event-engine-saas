@@ -17,7 +17,6 @@ st.set_page_config(page_title="EventEngine SaaS Engine", page_icon="🏰", layou
 CONFIG_FILE = "vendors.json"
 BOOKINGS_FILE = "bookings.json"
 
-# Load or Initialize Configuration Data
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
@@ -44,7 +43,7 @@ config_data = load_config()
 venues = config_data.get("venues", {})
 all_suppliers = config_data.get("suppliers", {})
 
-# PRE-CALCULATE ACTIVE/PAID SUPPLIERS (FIXES LINE 344 SCOPE ERROR)
+# PRE-CALCULATE ACTIVE SUPPLIERS
 today_str = datetime.date.today().strftime("%Y-%m-%d")
 active_suppliers = {}
 for s_id, sup in all_suppliers.items():
@@ -52,16 +51,14 @@ for s_id, sup in all_suppliers.items():
     if sub.get("status") == "ACTIVE" and sub.get("paid_until", "") >= today_str:
         active_suppliers[s_id] = sup
 
-# 2. GLOBAL ROUTING (URL Queries & Sidebar Navigation)
+# 2. GLOBAL ROUTING
 query_params = st.query_params
 active_venue_id = query_params.get("vendor", "athena")
 
 st.sidebar.title("🌐 SaaS Portal Directory")
 route = st.sidebar.radio("Navigation:", ["Client Booking Portal", "Venue & Vendor Registration", "SaaS Master Admin"])
 
-# ---------------------------------------------------------
-# ROUTE 1: SELF-SERVICE ONBOARDING (NEW VENUES & VENDORS)
-# ---------------------------------------------------------
+# ROUTE 1: ONBOARDING
 if route == "Venue & Vendor Registration":
     st.title("🚀 Join the EventEngine SaaS Platform")
     st.write("Register your venue or supplier business to accept client bookings online.")
@@ -126,12 +123,7 @@ if route == "Venue & Vendor Registration":
                 else:
                     st.error("Please complete all required fields.")
 
-# ---------------------------------------------------------
-# ROUTE 2: MASTER SAAS ADMIN CONSOLE
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-# ROUTE 2: MASTER SAAS ADMIN CONSOLE
-# ---------------------------------------------------------
+# ROUTE 2: ADMIN CONSOLE
 elif route == "SaaS Master Admin":
     st.title("🔑 Master SaaS Platform Admin")
     
@@ -159,9 +151,8 @@ elif route == "SaaS Master Admin":
             st.json(load_bookings())
         else:
             st.error("❌ Incorrect Admin PIN. Please try again.")
-# ---------------------------------------------------------
-# ROUTE 3: CLIENT BOOKING WIZARD (DYNAMIC FOR EACH VENUE)
-# ---------------------------------------------------------
+
+# ROUTE 3: CLIENT BOOKING WIZARD
 else:
     venue_cfg = venues.get(active_venue_id, {
         "business_name": "Athena Gardens Venue",
@@ -172,7 +163,6 @@ else:
         "partner_suppliers": list(active_suppliers.keys())
     })
 
-    # Session State Setup
     if "step" not in st.session_state:
         st.session_state.step = 1
     if "cart" not in st.session_state:
@@ -182,7 +172,6 @@ else:
     if "selected_suppliers" not in st.session_state:
         st.session_state.selected_suppliers = []
 
-    # Venue Branding Header
     logo_path = venue_cfg.get("logo_file", "")
     col_logo, col_title = st.columns([1, 4])
     with col_logo:
@@ -197,7 +186,6 @@ else:
     st.markdown("---")
     st.progress(st.session_state.step / 5)
 
-    # STEP 1: CLIENT DETAILS & DATE LOCK
     if st.session_state.step == 1:
         st.subheader("Step 1: Event Details & Availability Check")
         with st.form("client_form"):
@@ -226,7 +214,6 @@ else:
                         st.session_state.step = 2
                         st.rerun()
 
-    # STEP 2: VENUE SELECTION
     elif st.session_state.step == 2:
         st.subheader("Step 2: Select Venue Space")
         client = st.session_state.client_info
@@ -254,7 +241,6 @@ else:
                 st.session_state.step = 3
                 st.rerun()
 
-    # STEP 3: SUPPLIER CATEGORIES
     elif st.session_state.step == 3:
         st.subheader("Step 3: Select Required Vendor Categories")
         partner_ids = venue_cfg.get("partner_suppliers", list(active_suppliers.keys()))
@@ -277,7 +263,6 @@ else:
                 st.session_state.step = 4
                 st.rerun()
 
-    # STEP 4: CUSTOMIZE SUPPLIER PACKAGES
     elif st.session_state.step == 4:
         st.subheader("Step 4: Customize Vendor Items & Services")
         if not st.session_state.selected_suppliers:
@@ -318,7 +303,6 @@ else:
                 st.session_state.step = 5
                 st.rerun()
 
-    # STEP 5: REVIEW, PDF & DATE LOCKING
     elif st.session_state.step == 5:
         st.subheader("Step 5: Final Review & Date Lock")
         client = st.session_state.client_info
