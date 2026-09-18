@@ -123,7 +123,7 @@ if route == "Venue & Vendor Registration":
                 else:
                     st.error("Please complete all required fields.")
 
-# ROUTE 2: ADMIN CONSOLE
+# ROUTE 2: MASTER SAAS ADMIN CONSOLE
 elif route == "SaaS Master Admin":
     st.title("🔑 Master SaaS Platform Admin")
     
