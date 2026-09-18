@@ -31,6 +31,11 @@
       "business_name": "Savory Bites Catering",
       "category": "Catering & Buffets",
       "whatsapp": "26772222222",
+      "subscription": {
+        "status": "ACTIVE",
+        "paid_until": "2026-12-31",
+        "monthly_fee_bwp": 500.00
+      },
       "catalog": [
         {
           "item_id": "cat_01",
@@ -65,6 +70,11 @@
       "business_name": "Saina Essential",
       "category": "Decor & Event Styling",
       "whatsapp": "26774501880",
+      "subscription": {
+        "status": "ACTIVE",
+        "paid_until": "2026-12-31",
+        "monthly_fee_bwp": 500.00
+      },
       "catalog": [
         {
           "item_id": "se_01",
