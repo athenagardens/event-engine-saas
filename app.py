@@ -141,14 +141,44 @@ elif route == "SaaS Master Admin":
             col3.metric("Est. Monthly Revenue", f"P{len(venues)*1500 + len(all_suppliers)*500:,.2f}")
             
             st.markdown("---")
+            
+            # Formatted Venues Table
             st.subheader("🏢 Registered Venues")
-            st.json(venues)
+            if venues:
+                venue_rows = []
+                for v_id, v_info in venues.items():
+                    venue_rows.append({
+                        "Venue ID": v_id,
+                        "Business Name": v_info.get("business_name"),
+                        "WhatsApp": v_info.get("whatsapp"),
+                        "Status": v_info.get("subscription", {}).get("status", "N/A")
+                    })
+                st.table(pd.DataFrame(venue_rows))
+            else:
+                st.info("No venues registered yet.")
             
+            # Formatted Suppliers Table
             st.subheader("🛍️ Registered Suppliers")
-            st.json(all_suppliers)
-            
+            if all_suppliers:
+                supplier_rows = []
+                for s_id, s_info in all_suppliers.items():
+                    supplier_rows.append({
+                        "Supplier ID": s_id,
+                        "Business Name": s_info.get("business_name"),
+                        "Category": s_info.get("category"),
+                        "WhatsApp": s_info.get("whatsapp")
+                    })
+                st.table(pd.DataFrame(supplier_rows))
+            else:
+                st.info("No suppliers registered yet.")
+                
+            # Formatted Bookings Table
             st.subheader("📅 Stored Customer Bookings")
-            st.json(load_bookings())
+            bookings = load_bookings()
+            if bookings:
+                st.table(pd.DataFrame(bookings))
+            else:
+                st.info("No bookings recorded yet.")
         else:
             st.error("❌ Incorrect Admin PIN. Please try again.")
 
