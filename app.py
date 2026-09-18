@@ -47,6 +47,10 @@ db = load_data()
 
 # --- HELPER FUNCTION: EMAIL FLYER & LINK ---
 def send_flyer_email(recipient_email, event_name, flyer_image_url, checkout_link):
+    """
+    Sends an email with the direct booking link and the high-res flyer image attached.
+    To use automated sending via Gmail SMTP, populate sender credentials in st.secrets.
+    """
     sender_email = st.secrets.get("SMTP_EMAIL", "your_platform_email@gmail.com")
     sender_password = st.secrets.get("SMTP_PASSWORD", "")
 
@@ -71,6 +75,7 @@ def send_flyer_email(recipient_email, event_name, flyer_image_url, checkout_link
         )
         msg.attach(MIMEText(body, 'plain'))
 
+        # Download and attach image
         if flyer_image_url:
             req = urllib.request.Request(flyer_image_url, headers={'User-Agent': 'Mozilla/5.0'})
             img_data = urllib.request.urlopen(req).read()
@@ -85,53 +90,13 @@ def send_flyer_email(recipient_email, event_name, flyer_image_url, checkout_link
     except Exception as e:
         return False, f"Failed to send email: {str(e)}"
 
-# --- APP LAYOUT & CUSTOM CSS STYLING ---
+# --- APP LAYOUT & ROUTING ---
 st.set_page_config(page_title="Ticket Platform & Vendor Hub", layout="wide")
 
-# Custom CSS Injection to enforce UI styling
-st.markdown("""
-    <style>
-    /* Main Page Container Styling */
-    .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-        max-width: 1200px;
-    }
-    
-    /* Title & Header Styling */
-    h1 {
-        color: #1E293B !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.5px !important;
-    }
-    
-    /* Navigation Tab Styling */
-    button[data-baseweb="tab"] {
-        font-size: 16px !important;
-        font-weight: 600 !important;
-        padding: 10px 16px !important;
-    }
-    
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #FF4B4B !important;
-        border-bottom-color: #FF4B4B !important;
-    }
-
-    /* Input Field & Form Area Styling */
-    .stTextInput > div > div > input, .stTextArea > div > div > textarea {
-        border-radius: 8px !important;
-    }
-
-    /* Button Styling */
-    .stButton > button {
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
+# Get domain or fall back to local IP/localhost
 base_domain = st.secrets.get("APP_DOMAIN", "http://localhost:8501")
 
+# Detect incoming URL parameters (Customer Checkout View)
 query_params = st.query_params
 param_vendor = query_params.get("vendor")
 param_event = query_params.get("event")
@@ -142,6 +107,7 @@ param_event = query_params.get("event")
 if param_vendor and param_event:
     st.title("🎟️ Ticket Checkout")
     
+    # Locate Event
     sel_evt = next((e for e in db["events"] if e["event_id"] == param_event), None)
     sel_v = next((v for v in db["vendors"] if v["vendor_id"] == param_vendor), None)
     
@@ -170,18 +136,9 @@ if param_vendor and param_event:
                     submitted = st.form_submit_button("Complete Purchase")
                     
                     if submitted and cust_name and cust_email:
+                        # Process Sale
                         sel_evt["tickets_sold"] += qty
                         save_data(db)
-
-                        if sel_v and sel_v.get("email"):
-                            checkout_link = f"{base_domain}/?vendor={sel_v['vendor_id']}&event={sel_evt['event_id']}"
-                            send_flyer_email(
-                                recipient_email=sel_v["email"],
-                                event_name=sel_evt["title"],
-                                flyer_image_url=sel_evt.get("flyer_image_url", ""),
-                                checkout_link=checkout_link
-                            )
-
                         st.success(f"🎉 Success! {qty} ticket(s) purchased. Confirmation sent to {cust_email}.")
                         st.balloons()
             else:
@@ -234,10 +191,12 @@ else:
             selected_v_name = st.selectbox("Select Partner Vendor", v_names)
             sel_v = next(v for v in db["vendors"] if v["name"] == selected_v_name)
             
+        # Dynamic Direct Booking Link Construction
         direct_link = f"{base_domain}/?vendor={sel_v['vendor_id']}&event={sel_evt['event_id']}"
         
         st.divider()
         
+        # EMAIL SENDER FORM
         st.markdown("#### 1. Dispatch Flyer to Email")
         
         with st.form("send_email_form"):
@@ -258,6 +217,7 @@ else:
         
         st.divider()
         
+        # PREVIEW & MANUAL DOWNLOAD SECTION
         st.markdown("#### 2. Manual Preview & Download Option")
         col_prev1, col_prev2 = st.columns([1, 1])
         
