@@ -396,5 +396,4 @@ elif route == "Platform Administration":
                     del st.session_state.config_data["all_suppliers"][s_del]
                     save_json(CONFIG_FILE, st.session_state.config_data)
                     st.success(f"Removed '{s_del}'")
-                    st.rerun()emoved '{s_del}'")
                     st.rerun()
