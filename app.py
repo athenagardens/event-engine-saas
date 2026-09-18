@@ -97,7 +97,7 @@ primary_color = active_venue.get("brand_color", platform_info.get("primary_theme
 st.set_page_config(page_title=f"{platform_info.get('platform_name')} | Platform", layout="wide", initial_sidebar_state="expanded")
 
 # ==============================================================================
-# SLATE & ROYAL BLUE DESIGN SYSTEM (EVENLY SPACED MENU BARS)
+# SLATE & ROYAL BLUE DESIGN SYSTEM (BORDERLESS SIDEBAR MENU)
 # ==============================================================================
 st.markdown(f"""
     <style>
@@ -124,6 +124,15 @@ st.markdown(f"""
         display: none !important;
     }}
 
+    /* Sidebar Radio Container - Removed Box/Borders */
+    [data-testid="stSidebar"] [data-testid="stRadio"] {{
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }}
+
     /* Sidebar Radio Flex Group Container */
     [data-testid="stSidebar"] [data-testid="stRadio"] > div[role="radiogroup"] {{
         display: flex !important;
@@ -131,6 +140,8 @@ st.markdown(f"""
         gap: 12px !important;
         margin-top: 0px !important;
         padding-top: 0px !important;
+        border: none !important;
+        background: transparent !important;
     }}
 
     /* Individual Navigation Buttons (Strict Uniform Dimensions & Centering) */
