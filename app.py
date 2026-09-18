@@ -244,17 +244,8 @@ with st.sidebar:
     st.caption(platform_info.get("platform_tagline", "Event Management Platform"))
     st.markdown("---")
     
-    st.markdown(
-        """
-        <div style="font-weight: 700; font-size: 0.82rem; letter-spacing: 0.05em; margin-bottom: 12px; color: #94A3B8;">
-            NAVIGATION MENU
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    
     route = st.radio(
-        "NAVIGATION MENU", 
+        "Navigation", 
         ["Customer Marketplace", "Vendor Dashboard", "Partner Onboarding", "Master Administration"],
         index=0,
         label_visibility="collapsed"
