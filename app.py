@@ -111,11 +111,17 @@ st.markdown(f"""
         color: #F8FAFC !important;
     }}
     
-    /* Uniform Fixed Height & Width for Sidebar Menu Items */
-    [data-testid="stSidebar"] .stRadio > div {{
-        gap: 8px;
+    /* Strict Uniform Width & Alignment for Navigation Items */
+    [data-testid="stSidebar"] [data-testid="stRadio"] {{
+        width: 100% !important;
     }}
-    [data-testid="stSidebar"] .stRadio label {{
+    [data-testid="stSidebar"] [data-testid="stRadio"] > div {{
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label {{
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 6px;
@@ -124,10 +130,19 @@ st.markdown(f"""
         display: flex !important;
         align-items: center !important;
         width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
         box-sizing: border-box !important;
-        margin-bottom: 0px !important;
+        margin: 0 !important;
     }}
-    [data-testid="stSidebar"] .stRadio label:hover {{
+    [data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-child {{
+        flex-shrink: 0 !important;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label > div:nth-child(2) {{
+        flex-grow: 1 !important;
+        width: 100% !important;
+    }}
+    [data-testid="stSidebar"] [data-testid="stRadio"] label:hover {{
         background: rgba(255, 255, 255, 0.1);
     }}
     
