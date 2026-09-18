@@ -139,6 +139,17 @@ if param_vendor and param_event:
                         # Process Sale
                         sel_evt["tickets_sold"] += qty
                         save_data(db)
+
+                        # Send flyer & link automatically to the captured vendor's email
+                        if sel_v and sel_v.get("email"):
+                            checkout_link = f"{base_domain}/?vendor={sel_v['vendor_id']}&event={sel_evt['event_id']}"
+                            send_flyer_email(
+                                recipient_email=sel_v["email"],
+                                event_name=sel_evt["title"],
+                                flyer_image_url=sel_evt.get("flyer_image_url", ""),
+                                checkout_link=checkout_link
+                            )
+
                         st.success(f"🎉 Success! {qty} ticket(s) purchased. Confirmation sent to {cust_email}.")
                         st.balloons()
             else:
