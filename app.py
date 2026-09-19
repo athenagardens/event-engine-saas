@@ -248,7 +248,7 @@ if param_vendor and param_event:
         st.error("Requested event configuration not found.")
 
 # ---------------------------------------------------------
-# ROUTE 2: ENTERPRISE MANAGEMENT HUB
+# ROUTE 2: ENTERPRISE MANAGEMENT HUB (DYNAMIC RBAC VIEWS)
 # ---------------------------------------------------------
 else:
     # SIDEBAR CONTROL & ROLE ACCESS
@@ -260,151 +260,62 @@ else:
     )
     
     st.title("Event Booking Engine & Venue Management System")
-    
-    if user_role == "Super Admin":
-        st.info("**Scope: Global Platform Controls.** Unrestricted access across all system entities, financial records, and logs.")
-    elif user_role == "Venue Manager":
-        st.warning("**Scope: Venue Operations.** Data view filtered strictly to assigned facility spaces and events.")
-    else:
-        st.success("**Scope: Affiliate Promotion.** Access restricted to promotional toolsets and assigned referral metrics.")
-
+    st.caption(f"Currently viewing console as: **{user_role}**")
     st.divider()
 
-    # NAVIGATION TABS
-    tab_overview, tab_flyer_builder, tab_events, tab_venue_mgmt, tab_billing = st.tabs([
-        "Dashboard Overview", 
-        "Flyer & Link Distribution", 
-        "Event Inventory", 
-        "Facility Management",
-        "Financial & Invoicing"
-    ])
-    
-    # --- TAB 1: OVERVIEW METRICS ---
-    with tab_overview:
-        st.subheader("Performance Metrics")
-        st.caption("Real-time operational summary and ticket revenue tracking.")
+    # --- ROLE 1: SUPER ADMIN VIEW ---
+    if user_role == "Super Admin":
+        st.info("**Scope: Global Platform Controls.** Unrestricted access across all system entities, financial records, and logs.")
         
-        m_col1, m_col2, m_col3 = st.columns(3)
-        total_gross = sum(e["tickets_sold"] * e["price_per_ticket"] for e in db["events"])
-        total_sold = sum(e["tickets_sold"] for e in db["events"])
-        total_capacity = sum(e["tickets_total"] for e in db["events"])
+        tab_overview, tab_events, tab_venue_mgmt, tab_billing = st.tabs([
+            "Dashboard Overview", 
+            "All Events Inventory", 
+            "Facility Management",
+            "Platform Financials"
+        ])
         
-        m_col1.metric("Gross Revenue", f"BWP {total_gross:,.2f}")
-        m_col2.metric("Tickets Sold", total_sold)
-        m_col3.metric("Fulfillment Rate", f"{(total_sold/total_capacity*100) if total_capacity else 0:.1f}%")
-        
-        st.divider()
-        st.markdown("##### Event Breakdown")
-        for evt in db["events"]:
-            rev = evt["tickets_sold"] * evt["price_per_ticket"]
-            st.write(f"**{evt['title']}** | Allocation: `{evt['tickets_sold']}/{evt['tickets_total']}` | Total Revenue: `BWP {rev:,.2f}`")
-
-    # --- TAB 2: FLYER BUILDER & LINK GENERATOR ---
-    with tab_flyer_builder:
-        st.subheader("Promotional Link & Asset Distribution")
-        st.caption("Generate trackable referral booking URLs for digital campaign distribution.")
-        
-        col_f1, col_f2 = st.columns(2, gap="large")
-        
-        with col_f1:
-            st.markdown("##### Configuration")
-            evt_titles = [e["title"] for e in db["events"]]
-            sel_title = st.selectbox("Target Event", evt_titles)
-            sel_evt = next(e for e in db["events"] if e["title"] == sel_title)
+        with tab_overview:
+            st.subheader("Performance Metrics")
+            st.caption("Real-time operational summary and ticket revenue tracking.")
             
-            v_names = [v["name"] for v in db["vendors"]]
-            sel_v_name = st.selectbox("Promoting Affiliate Profile", v_names)
-            sel_v = next(v for v in db["vendors"] if v["name"] == sel_v_name)
+            m_col1, m_col2, m_col3 = st.columns(3)
+            total_gross = sum(e["tickets_sold"] * e["price_per_ticket"] for e in db["events"])
+            total_sold = sum(e["tickets_sold"] for e in db["events"])
+            total_capacity = sum(e["tickets_total"] for e in db["events"])
             
-            custom_flyer_url = st.text_input("Flyer Image Endpoint URL", value=sel_evt.get("flyer_image_url", ""))
-            if custom_flyer_url != sel_evt.get("flyer_image_url"):
-                sel_evt["flyer_image_url"] = custom_flyer_url
-                save_data(db)
-
-        with col_f2:
-            interactive_booking_link = f"{base_domain}/?vendor={sel_v['vendor_id']}&event={sel_evt['event_id']}"
-            whatsapp_caption = f"Tickets for {sel_evt['title']} are available at the following link:\n{interactive_booking_link}"
-            encoded_wa = urllib.parse.quote(whatsapp_caption)
-            wa_share_url = f"https://wa.me/?text={encoded_wa}"
+            m_col1.metric("Gross Revenue", f"BWP {total_gross:,.2f}")
+            m_col2.metric("Tickets Sold", total_sold)
+            m_col3.metric("Fulfillment Rate", f"{(total_sold/total_capacity*100) if total_capacity else 0:.1f}%")
             
-            st.markdown("##### Direct Output Preview")
-            if sel_evt.get("flyer_image_url"):
-                st.image(sel_evt["flyer_image_url"], caption=f"Asset Preview: {sel_evt['title']}", use_container_width=True)
-                
-            st.text_input("Trackable Booking URL", value=interactive_booking_link)
-            st.text_area("Formated WhatsApp Text Payload", value=whatsapp_caption, height=90)
-            
-            st.markdown(
-                f'<a href="{wa_share_url}" target="_blank" style="text-decoration:none;">'
-                f'<button style="background-color:#0F172A; color:white; font-weight:600; '
-                f'padding:10px 16px; border-radius:4px; border:none; cursor:pointer; width:100%; font-size:14px;">'
-                f'Dispatch to WhatsApp Channel</button></a>',
-                unsafe_allow_html=True
-            )
+            st.divider()
+            st.markdown("##### System Breakdown")
+            for evt in db["events"]:
+                rev = evt["tickets_sold"] * evt["price_per_ticket"]
+                st.write(f"**{evt['title']}** | Allocation: `{evt['tickets_sold']}/{evt['tickets_total']}` | Total Revenue: `BWP {rev:,.2f}`")
 
-    # --- TAB 3: MANAGE EVENTS ---
-    with tab_events:
-        st.subheader("Event Inventory Management")
-        st.caption("Publish and edit scheduled event profiles, ticket tiers, and capacity constraints.")
-        
-        with st.expander("Create New Event Record"):
-            with st.form("new_event_form"):
-                new_title = st.text_input("Event Designation")
-                new_date = st.date_input("Scheduled Date")
-                new_loc = st.text_input("Venue Facility Location", value="Gaborone International Convention Centre")
-                new_total = st.number_input("Maximum Capacity Allocation", min_value=1, value=100)
-                new_price = st.number_input("Unit Price (BWP)", min_value=0.0, value=250.0)
-                new_flyer = st.text_input("Flyer Image URL", value="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800")
-                new_desc = st.text_area("Description Summary", value="Official scheduled event.")
-                
-                if st.form_submit_button("Publish Event Entry"):
-                    new_evt_obj = {
-                        "event_id": f"evt_{len(db['events']) + 101}",
-                        "title": new_title,
-                        "date": str(new_date),
-                        "location": new_loc,
-                        "venue_id": "v_central_park",
-                        "tickets_total": new_total,
-                        "tickets_sold": 0,
-                        "price_per_ticket": new_price,
-                        "flyer_image_url": new_flyer,
-                        "description": new_desc
-                    }
-                    db["events"].append(new_evt_obj)
-                    save_data(db)
-                    st.success(f"Record '{new_title}' successfully published.")
-                    st.rerun()
+        with tab_events:
+            st.subheader("Global Event Inventory")
+            st.json(db["events"])
 
-        st.json(db["events"])
+        with tab_venue_mgmt:
+            st.subheader("Facility & Subcontractor Infrastructure")
+            col_v1, col_v2 = st.columns(2, gap="large")
+            with col_v1:
+                st.markdown("##### Facility Profiles")
+                st.json(db["venues"])
+            with col_v2:
+                st.markdown("##### Associated Subcontractors")
+                st.json(db["services"])
 
-    # --- TAB 4: VENUE & FACILITY MANAGEMENT ---
-    with tab_venue_mgmt:
-        st.subheader("Facility & Subcontractor Infrastructure")
-        st.caption("Management of physical venue spaces and accredited service providers.")
-        
-        col_v1, col_v2 = st.columns(2, gap="large")
-        with col_v1:
-            st.markdown("##### Facility Profile Data")
-            st.json(db["venues"])
-            
-        with col_v2:
-            st.markdown("##### Associated Subcontractors")
-            st.json(db["services"])
-
-    # --- TAB 5: INVOICING & FINANCIALS ---
-    with tab_billing:
-        st.subheader("Financial Statements & Settlement Log")
-        st.caption("System revenue sharing, platform service fees, and automated invoicing.")
-        
-        if user_role == "Super Admin":
-            st.markdown("##### Platform Financial Overview")
+        with tab_billing:
+            st.subheader("Platform Financial Summary")
             col_b1, col_b2, col_b3 = st.columns(3)
             
             total_rev = sum(e["tickets_sold"] * e["price_per_ticket"] for e in db["events"])
             platform_fee = total_rev * 0.05
             net_payout = total_rev - platform_fee
             
-            col_b1.metric("Gross Revenue", f"BWP {total_rev:,.2f}")
+            col_b1.metric("Gross Platform Revenue", f"BWP {total_rev:,.2f}")
             col_b2.metric("Platform Retention (5.0%)", f"BWP {platform_fee:,.2f}")
             col_b3.metric("Net Facility Payout", f"BWP {net_payout:,.2f}")
             
@@ -413,16 +324,114 @@ else:
             st.text_input("Billed Entity Name", value="Gaborone International Convention Centre Operations Pty Ltd")
             st.text_input("Applied Platform Fee Margin", value="5.0%")
             st.button("Export Official Invoice Record")
+
+    # --- ROLE 2: VENUE MANAGER VIEW ---
+    elif user_role == "Venue Manager":
+        st.warning("**Scope: Venue Operations.** Data view filtered strictly to assigned facility spaces and events.")
+        
+        tab_events, tab_venue_mgmt, tab_billing = st.tabs([
+            "Manage In-House Events", 
+            "Facility Settings",
+            "Venue Settlement Statement"
+        ])
+        
+        with tab_events:
+            st.subheader("Facility Event Inventory Management")
+            st.caption("Publish and edit scheduled event profiles, ticket tiers, and capacity constraints.")
             
-        elif user_role == "Venue Manager":
-            st.markdown("##### Venue Settlement Statement")
+            with st.expander("Create New Event Record"):
+                with st.form("new_event_form"):
+                    new_title = st.text_input("Event Designation")
+                    new_date = st.date_input("Scheduled Date")
+                    new_loc = st.text_input("Venue Facility Location", value="Gaborone International Convention Centre")
+                    new_total = st.number_input("Maximum Capacity Allocation", min_value=1, value=100)
+                    new_price = st.number_input("Unit Price (BWP)", min_value=0.0, value=250.0)
+                    new_flyer = st.text_input("Flyer Image URL", value="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800")
+                    new_desc = st.text_area("Description Summary", value="Official scheduled event.")
+                    
+                    if st.form_submit_button("Publish Event Entry"):
+                        new_evt_obj = {
+                            "event_id": f"evt_{len(db['events']) + 101}",
+                            "title": new_title,
+                            "date": str(new_date),
+                            "location": new_loc,
+                            "venue_id": "v_central_park",
+                            "tickets_total": new_total,
+                            "tickets_sold": 0,
+                            "price_per_ticket": new_price,
+                            "flyer_image_url": new_flyer,
+                            "description": new_desc
+                        }
+                        db["events"].append(new_evt_obj)
+                        save_data(db)
+                        st.success(f"Record '{new_title}' successfully published.")
+                        st.rerun()
+
+            st.json(db["events"])
+
+        with tab_venue_mgmt:
+            st.subheader("Facility Infrastructure")
+            st.json(db["venues"])
+
+        with tab_billing:
+            st.subheader("Venue Settlement Statement")
             st.info("Settlements are processed on a rolling 7-day cycle net of platform service processing fees.")
             st.write("**Processed Ticket Sales:** BWP 5,250.00")
             st.write("**Platform Overhead Fee (5.0%):** -BWP 262.50")
             st.write("**Net Funds Disbursed:** BWP 4,987.50")
+
+    # --- ROLE 3: VENDOR / PROMOTER VIEW ---
+    elif user_role == "Vendor / Promoter":
+        st.success("**Scope: Affiliate Promotion.** Access restricted to promotional toolsets and assigned referral metrics.")
+        
+        tab_flyer_builder, tab_commissions = st.tabs([
+            "Flyer & Link Distribution", 
+            "Affiliate Earnings"
+        ])
+        
+        with tab_flyer_builder:
+            st.subheader("Promotional Link & Asset Distribution")
+            st.caption("Generate trackable referral booking URLs for digital campaign distribution.")
             
-        else:
-            st.markdown("##### Affiliate Commission Statement")
+            col_f1, col_f2 = st.columns(2, gap="large")
+            
+            with col_f1:
+                st.markdown("##### Configuration")
+                evt_titles = [e["title"] for e in db["events"]]
+                sel_title = st.selectbox("Target Event", evt_titles)
+                sel_evt = next(e for e in db["events"] if e["title"] == sel_title)
+                
+                sel_v = db["vendors"][0] # Automatically defaults to logged-in promoter profile
+                st.text_input("Active Promoter Profile", value=sel_v["name"], disabled=True)
+                
+                custom_flyer_url = st.text_input("Flyer Image Endpoint URL", value=sel_evt.get("flyer_image_url", ""))
+                if custom_flyer_url != sel_evt.get("flyer_image_url"):
+                    sel_evt["flyer_image_url"] = custom_flyer_url
+                    save_data(db)
+
+            with col_f2:
+                interactive_booking_link = f"{base_domain}/?vendor={sel_v['vendor_id']}&event={sel_evt['event_id']}"
+                whatsapp_caption = f"Tickets for {sel_evt['title']} are available at the following link:\n{interactive_booking_link}"
+                encoded_wa = urllib.parse.quote(whatsapp_caption)
+                wa_share_url = f"https://wa.me/?text={encoded_wa}"
+                
+                st.markdown("##### Direct Output Preview")
+                if sel_evt.get("flyer_image_url"):
+                    st.image(sel_evt["flyer_image_url"], caption=f"Asset Preview: {sel_evt['title']}", use_container_width=True)
+                    
+                st.text_input("Trackable Booking URL", value=interactive_booking_link)
+                st.text_area("Formated WhatsApp Text Payload", value=whatsapp_caption, height=90)
+                
+                st.markdown(
+                    f'<a href="{wa_share_url}" target="_blank" style="text-decoration:none;">'
+                    f'<button style="background-color:#0F172A; color:white; font-weight:600; '
+                    f'padding:10px 16px; border-radius:4px; border:none; cursor:pointer; width:100%; font-size:14px;">'
+                    f'Dispatch to WhatsApp Channel</button></a>',
+                    unsafe_allow_html=True
+                )
+
+        with tab_commissions:
+            st.subheader("Affiliate Commission Statement")
             st.info("Commission payouts are calculated directly from verified referral link conversions.")
             st.write("**Total Commission Accrued:** BWP 525.00")
             st.write("**Payout Status:** Settled")
