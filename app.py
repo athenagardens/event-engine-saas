@@ -115,7 +115,7 @@ with st.sidebar.expander("System Utilities"):
 # ---------------------------------------------------------
 if user_role == "Public Portal (Bookings & Ticketing)":
     st.title("Central Venue Booking & Public Ticketing Console")
-    st.caption("Reserve enterprise facilities and customize vendor packages with separate billing.")
+    st.caption("Reserve enterprise facilities and customize approved vendor packages with separate billing.")
     st.divider()
 
     public_tab1, public_tab2 = st.tabs(["Book Venue & Vendor Packages", "Public Event Ticket Shop"])
@@ -188,11 +188,15 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                     st.success(f"✅ DATE AVAILABLE: '{sel_sp_name}' is open on {date_str}.")
 
                     st.divider()
-                    st.markdown("### 3. Add Service Provider Packages (Supporters)")
-                    st.info("💡 Vendor services are billed directly by each independent provider. Separate invoices will be issued.")
+                    st.markdown("### 3. Add Approved Service Provider Packages")
+                    st.info(f"💡 Showing vendors approved specifically by {sel_venue.get('name')}. Services are billed directly by each provider.")
 
                     selected_vendor_orders = {}
-                    supporters = db.get("supporters", [])
+                    
+                    # FILTER VENDORS APPROVED BY THIS SPECIFIC FACILITY OWNER
+                    approved_ids = sel_venue.get("approved_supporter_ids", [])
+                    all_supporters = db.get("supporters", [])
+                    supporters = [s for s in all_supporters if s.get("supporter_id") in approved_ids]
 
                     if supporters:
                         for sup in supporters:
@@ -236,7 +240,7 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                                             "total": sup_total
                                         }
                     else:
-                        st.info("No supplier add-ons currently available.")
+                        st.info(f"No approved vendor packages currently assigned to {sel_venue.get('name')}.")
 
                     st.divider()
                     st.markdown("### 4. Separate Itemized Invoices / Quotations")
@@ -409,8 +413,8 @@ if user_role == "Public Portal (Bookings & Ticketing)":
 # 5. MODULE 2: FACILITY OWNER CONSOLE & REPORTING
 # ---------------------------------------------------------
 elif user_role == "Facility Owner Console":
-    st.title("Facility Owner Console & Financial Reports")
-    st.caption("Manage spaces, confirm bookings, verify venue POPs, and view earnings reports.")
+    st.title("Facility Owner Console & Curation")
+    st.caption("Manage spaces, select approved facility supporters, confirm bookings, and view earnings reports.")
     st.divider()
 
     venues = db.get("venues", [])
@@ -447,7 +451,8 @@ elif user_role == "Facility Owner Console":
                         "brand_secondary": "#2563EB",
                         "logo_url": logo_url,
                         "flyer_image_url": SPACE_PRESETS[0],
-                        "spaces": []
+                        "spaces": [],
+                        "approved_supporter_ids": []
                     })
                     save_data(db)
                     st.success("Facility Registered Successfully!")
@@ -470,13 +475,15 @@ elif user_role == "Facility Owner Console":
             </div>
         """, unsafe_allow_html=True)
 
-        t_spaces, t_brand, t_verify, t_reports = st.tabs([
+        t_spaces, t_vendors, t_brand, t_verify, t_reports = st.tabs([
             "Configured Sub-Spaces", 
+            "🤝 Approved Vendor Network",
             "Profile & WhatsApp Setup",
             "✅ Verify POPs & Confirm Bookings",
             "📊 Facility Financial Reports"
         ])
 
+        # SUB-SPACES
         with t_spaces:
             with st.form("add_sp"):
                 s_name = st.text_input("Sub-Space Name")
@@ -495,6 +502,41 @@ elif user_role == "Facility Owner Console":
             st.divider()
             for sp in cur_v.get("spaces", []):
                 st.write(f"• **{sp.get('name')}** — Capacity: {sp.get('capacity')} | BWP {sp.get('daily_rate'):,.2f}/day")
+
+        # APPROVED VENDOR SELECTION
+        with t_vendors:
+            st.markdown("#### Select & Approve Global Vendors for Your Facility")
+            st.caption("Check the vendors you wish to allow to offer catering, decor, AV, or security packages to clients booking your venue.")
+
+            all_global_supporters = db.get("supporters", [])
+            current_approved_ids = set(cur_v.get("approved_supporter_ids", []))
+
+            if not all_global_supporters:
+                st.info("No global vendors have registered on the platform yet.")
+            else:
+                with st.form("vendor_curation_form"):
+                    updated_approved_ids = []
+                    for sup in all_global_supporters:
+                        is_checked = sup.get("supporter_id") in current_approved_ids
+                        col_s1, col_s2 = st.columns([1, 4])
+                        with col_s1:
+                            st.image(sup.get("logo_url", DEFAULT_LOGO), width=80)
+                        with col_s2:
+                            chk = st.checkbox(
+                                f"**{sup.get('business_name')}** (`{sup.get('category')}`)",
+                                value=is_checked,
+                                key=f"vendor_chk_{sup.get('supporter_id')}"
+                            )
+                            st.caption(f"Contact: {sup.get('contact_person')} ({sup.get('phone')})")
+                            if chk:
+                                updated_approved_ids.append(sup.get("supporter_id"))
+                        st.divider()
+
+                    if st.form_submit_button("Save Approved Vendor Network", type="primary"):
+                        cur_v["approved_supporter_ids"] = updated_approved_ids
+                        save_data(db)
+                        st.success("Approved Vendor Network updated successfully!")
+                        st.rerun()
 
         with t_brand:
             with st.form("update_v_brand"):
