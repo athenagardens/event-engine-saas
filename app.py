@@ -134,7 +134,7 @@ def generate_in_memory_pdf_bytes(title_text, inv_id, created_at, entity_name, ta
     story = []
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#0F172A'))
+    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#0F172A'), alignment=1)
     story.append(Paragraph(f"{title_text.upper()}", title_style))
     story.append(Spacer(1, 10))
 
@@ -189,7 +189,7 @@ st.markdown("""
     <style>
         .main { background-color: #F8FAFC; }
         .invoice-box { background: #FFFFFF; padding: 1.5rem; border-radius: 8px; border: 1px solid #CBD5E1; margin-bottom: 1.5rem; }
-        .profile-card { padding: 1.2rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1rem; }
+        .profile-card { padding: 1.2rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1rem; text-align: center; }
         .logo-img { max-height: 50px; max-width: 150px; object-fit: contain; }
         @media print {
             [data-testid="stSidebar"], button, header { display: none !important; }
@@ -206,12 +206,12 @@ if "authenticated" not in st.session_state:
 # ---------------------------------------------------------
 # 4. SIDEBAR NAVIGATION
 # ---------------------------------------------------------
-st.sidebar.markdown("## 🏢 ENTERPRISE GATEWAY")
-st.sidebar.caption("SaaS Venue & Vendor Infrastructure")
+st.sidebar.markdown("<h2 style='text-align: center;'>🏢 ENTERPRISE GATEWAY</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='text-align: center;'><b>SaaS Venue & Vendor Infrastructure</b></p>", unsafe_allow_html=True)
 st.sidebar.divider()
 
 user_role = st.sidebar.radio(
-    "Management Console:",
+    "**Management Console:**",
     [
         "Enterprise Marketplace & Event Hub",
         "Venue Operations & Asset Management",
@@ -230,7 +230,7 @@ if user_role in ["Enterprise Marketplace & Event Hub", "Access Control & Verific
 
 st.sidebar.divider()
 if st.session_state["authenticated"]:
-    st.sidebar.success(f"Authenticated: {st.session_state['user_email']}")
+    st.sidebar.success(f"Authenticated: **{st.session_state['user_email']}**")
     if st.sidebar.button("Log Out", use_container_width=True):
         st.session_state["authenticated"] = False
         st.session_state["user_email"] = None
@@ -251,8 +251,8 @@ with st.sidebar.expander("System Utilities"):
 # 5. MODULE 1: ENTERPRISE MARKETPLACE & EVENT HUB
 # ---------------------------------------------------------
 if user_role == "Enterprise Marketplace & Event Hub":
-    st.title("Enterprise Marketplace & Event Hub")
-    st.caption("Reserve commercial facilities, select preferred vendor add-ons, and download official invoices.")
+    st.markdown("<h1 style='text-align: center;'>Enterprise Marketplace & Event Hub</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'><b>Reserve commercial facilities, select preferred vendor add-ons, and download official invoices.</b></p>", unsafe_allow_html=True)
     st.divider()
 
     tab_book, tab_tickets = st.tabs(["🏛️ Commercial Venue Reservations", "🎟️ Event Box Office & Ticketing"])
@@ -264,19 +264,20 @@ if user_role == "Enterprise Marketplace & Event Hub":
         if not venues:
             st.warning("No registered venue properties listed in network.")
         else:
-            sel_v_name = st.selectbox("1. Select Destination Venue Facility:", [v['name'] for v in venues])
+            sel_v_name = st.selectbox("**1. Select Destination Venue Facility:**", [v['name'] for v in venues])
             sel_venue = next(v for v in venues if v['name'] == sel_v_name)
 
             col1, col2 = st.columns([1, 2])
             col1.image(sel_venue['flyer_image_url'] or SPACE_PRESETS[0], use_container_width=True)
             col2.markdown(f"""
-                <div style="background:{sel_venue['brand_color']}; padding:1rem; border-radius:8px; color:white;">
+                <div style="background:{sel_venue['brand_color']}; padding:1rem; border-radius:8px; color:white; text-align:center;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h2>{sel_venue['name']}</h2>
+                        <h2 style="margin:0;">{sel_venue['name']}</h2>
                         <img src="{sel_venue['logo_url'] or DEFAULT_LOGO}" class="logo-img" style="background:white; padding:2px; border-radius:4px;">
                     </div>
-                    <p>📍 Location: {sel_venue['address']} | 👥 Licensed Capacity: {sel_venue['max_capacity']:,}<br>
-                    💬 WhatsApp POP Verification Line: {sel_venue['whatsapp_no']}</p>
+                    <hr style="margin: 0.5rem 0;">
+                    <p><b>📍 Location:</b> {sel_venue['address']} | <b>👥 Licensed Capacity:</b> {sel_venue['max_capacity']:,}<br>
+                    <b>💬 WhatsApp POP Verification Line:</b> {sel_venue['whatsapp_no']}</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -285,12 +286,12 @@ if user_role == "Enterprise Marketplace & Event Hub":
                 st.warning("No available sub-spaces listed for this facility.")
             else:
                 st.divider()
-                st.markdown("### 2. Space Selection & Event Scheduling")
+                st.markdown("<h3 style='text-align: center;'>2. Space Selection & Event Scheduling</h3>", unsafe_allow_html=True)
                 sc1, sc2, sc3 = st.columns(3)
-                sel_sp_name = sc1.selectbox("Select Sub-Facility / Hall", [s['name'] for s in spaces])
+                sel_sp_name = sc1.selectbox("**Select Sub-Facility / Hall**", [s['name'] for s in spaces])
                 sel_space = next(s for s in spaces if s['name'] == sel_sp_name)
-                booking_date = sc2.date_input("Event Date", min_value=datetime.date.today())
-                booking_days = sc3.number_input("Reservation Duration (Days)", min_value=1, value=1)
+                booking_date = sc2.date_input("**Event Date**", min_value=datetime.date.today())
+                booking_days = sc3.number_input("**Reservation Duration (Days)**", min_value=1, value=1)
 
                 date_str = str(booking_date)
                 space_cost = sel_space['daily_rate'] * booking_days
@@ -304,7 +305,7 @@ if user_role == "Enterprise Marketplace & Event Hub":
                     st.success(f"✅ Schedule Confirmed: '{sel_sp_name}' is open for booking on {date_str}.")
                     
                     st.divider()
-                    st.markdown("### 3. Ancillary Vendor Service Bundles")
+                    st.markdown("<h3 style='text-align: center;'>3. Ancillary Vendor Service Bundles</h3>", unsafe_allow_html=True)
                     approved_ids = json.loads(sel_venue['approved_supporter_ids'] or "[]")
                     selected_vendor_orders = {}
 
@@ -321,9 +322,9 @@ if user_role == "Enterprise Marketplace & Event Hub":
                                     for t in templates:
                                         tc1, tc2 = st.columns([1, 3])
                                         if t['image_url']: tc1.image(t['image_url'], use_container_width=True)
-                                        tc2.markdown(f"**{t['item_name']}** — BWP {t['unit_price']:,.2f} / {t['unit_type']}")
-                                        if t['description']: tc2.caption(t['description'])
-                                        qty = tc2.number_input("Quantity", min_value=0, value=0, key=f"qty_{sup['supporter_id']}_{t['template_id']}")
+                                        tc2.markdown(f"**{t['item_name']}** — **BWP {t['unit_price']:,.2f}** / **{t['unit_type']}**")
+                                        if t['description']: tc2.caption(f"**Description:** {t['description']}")
+                                        qty = tc2.number_input(f"**Quantity for {t['item_name']}**", min_value=0, value=0, key=f"qty_{sup['supporter_id']}_{t['template_id']}")
                                         if qty > 0:
                                             cost = qty * t['unit_price']
                                             sup_total += cost
@@ -332,12 +333,12 @@ if user_role == "Enterprise Marketplace & Event Hub":
                                         selected_vendor_orders[sup['supporter_id']] = {"info": sup, "items": sup_items, "total": sup_total}
 
                     st.divider()
-                    st.markdown("### 4. Billing Confirmation & Invoice Generation")
+                    st.markdown("<h3 style='text-align: center;'>4. Billing Confirmation & Invoice Generation</h3>", unsafe_allow_html=True)
                     with st.form("confirm_booking_form"):
-                        c_name = st.text_input("Client Entity / Full Name*")
-                        c_email = st.text_input("Billing Email Address*")
-                        c_phone = st.text_input("Contact Phone / WhatsApp Line*")
-                        c_pay = st.selectbox("Preferred Settlement Method", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Wire Transfer"])
+                        c_name = st.text_input("**Client Entity / Full Name***")
+                        c_email = st.text_input("**Billing Email Address***")
+                        c_phone = st.text_input("**Contact Phone / WhatsApp Line***")
+                        c_pay = st.selectbox("**Preferred Settlement Method**", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Wire Transfer"])
 
                         if st.form_submit_button("Submit Reservation & Dispatch Invoices", type="primary"):
                             if c_name and c_email and c_phone:
@@ -393,14 +394,14 @@ if user_role == "Enterprise Marketplace & Event Hub":
                 v = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (ev['venue_id'],)).fetchone()
                 col1, col2 = st.columns([1, 2])
                 col1.image(ev['flyer_url'] or SPACE_PRESETS[0], use_container_width=True)
-                col2.markdown(f"### {ev['title']}")
-                col2.write(f"Venue: {ev['venue_name']} | Event Date: {ev['date']} | Admission Fee: BWP {ev['price']:,.2f}")
+                col2.markdown(f"<h3 style='text-align: center;'>{ev['title']}</h3>", unsafe_allow_html=True)
+                col2.write(f"**Venue:** {ev['venue_name']} | **Event Date:** {ev['date']} | **Admission Fee:** BWP {ev['price']:,.2f}")
                 
                 with col2.form(f"tkt_buy_{ev['event_id']}"):
-                    t_qty = st.number_input("Pass Quantity", min_value=1, value=1)
-                    t_buyer = st.text_input("Attendee Full Name*")
-                    t_email = st.text_input("Contact Email Address*")
-                    t_pay = st.selectbox("Settlement Method", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Deposit"])
+                    t_qty = st.number_input("**Pass Quantity**", min_value=1, value=1)
+                    t_buyer = st.text_input("**Attendee Full Name***")
+                    t_email = st.text_input("**Contact Email Address***")
+                    t_pay = st.selectbox("**Settlement Method**", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Deposit"])
                     
                     if st.form_submit_button("Issue Admission Pass Request"):
                         if t_buyer and t_email:
@@ -423,7 +424,7 @@ if user_role == "Enterprise Marketplace & Event Hub":
 # 6. MODULE 2: VENUE OPERATIONS & ASSET MANAGEMENT
 # ---------------------------------------------------------
 elif user_role == "Venue Operations & Asset Management":
-    st.title("Venue Operations & Asset Management Console")
+    st.markdown("<h1 style='text-align: center;'>Venue Operations & Asset Management Console</h1>", unsafe_allow_html=True)
     conn = get_db_connection()
 
     if not st.session_state["authenticated"] or st.session_state["user_role"] != "Facility Owner":
@@ -433,8 +434,8 @@ elif user_role == "Venue Operations & Asset Management":
         
         with login_tab:
             with st.form("fac_login"):
-                l_email = st.text_input("Operator Email")
-                l_pw = st.text_input("Account Password", type="password")
+                l_email = st.text_input("**Operator Email**")
+                l_pw = st.text_input("**Account Password**", type="password")
                 if st.form_submit_button("Authenticate"):
                     user = conn.execute("SELECT * FROM users WHERE email = ? AND password_hash = ? AND role = 'Facility Owner'",
                                         (l_email, hash_pw(l_pw))).fetchone()
@@ -450,16 +451,16 @@ elif user_role == "Venue Operations & Asset Management":
 
         with reg_tab:
             with st.form("reg_facility_auth"):
-                f_name = st.text_input("Venue Facility Name*")
-                f_type = st.selectbox("Facility Designation", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"])
-                f_email = st.text_input("Corporate Email*")
-                f_pw = st.text_input("Account Password*", type="password")
-                f_phone = st.text_input("Direct Telephone Line*")
-                f_whatsapp = st.text_input("WhatsApp POP Verification Number*", placeholder="26771234567")
-                f_address = st.text_input("Physical Location / Street Address*")
-                f_tax = st.text_input("Tax / CIPA Registration Number*")
-                f_bank = st.text_area("Corporate Settlement Instructions*")
-                f_logo = st.file_uploader("Corporate Brand Logo", type=["png", "jpg", "jpeg"])
+                f_name = st.text_input("**Venue Facility Name***")
+                f_type = st.selectbox("**Facility Designation**", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"])
+                f_email = st.text_input("**Corporate Email***")
+                f_pw = st.text_input("**Account Password***", type="password")
+                f_phone = st.text_input("**Direct Telephone Line***")
+                f_whatsapp = st.text_input("**WhatsApp POP Verification Number***", placeholder="26771234567")
+                f_address = st.text_input("**Physical Location / Street Address***")
+                f_tax = st.text_input("**Tax / CIPA Registration Number***")
+                f_bank = st.text_area("**Corporate Settlement Instructions***")
+                f_logo = st.file_uploader("**Corporate Brand Logo**", type=["png", "jpg", "jpeg"])
 
                 if st.form_submit_button("Register Venue Profile"):
                     if f_name and f_email and f_pw and f_whatsapp:
@@ -482,8 +483,8 @@ elif user_role == "Venue Operations & Asset Management":
         if cur_v:
             st.markdown(f"""
                 <div class="profile-card" style="background:{cur_v['brand_color']};">
-                    <h2>🏛️ {cur_v['name']}</h2>
-                    <p>📍 Location: {cur_v['address']} | 💬 WhatsApp Verification Line: {cur_v['whatsapp_no']}</p>
+                    <h2 style="margin:0;">🏛️ {cur_v['name']}</h2>
+                    <p style="margin:0;"><b>📍 Location:</b> {cur_v['address']} | <b>💬 WhatsApp Verification Line:</b> {cur_v['whatsapp_no']}</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -493,10 +494,10 @@ elif user_role == "Venue Operations & Asset Management":
 
             with tab_spaces:
                 with st.form("add_space_form"):
-                    s_name = st.text_input("Sub-Space / Hall Identifier")
-                    s_cap = st.number_input("Capacity Rating", value=250)
-                    s_rate = st.number_input("Standard Daily Hire Tariff (BWP)", value=2500.0)
-                    s_img = st.file_uploader("Space Media Image", type=["png", "jpg", "jpeg"])
+                    s_name = st.text_input("**Sub-Space / Hall Identifier**")
+                    s_cap = st.number_input("**Capacity Rating**", value=250)
+                    s_rate = st.number_input("**Standard Daily Hire Tariff (BWP)**", value=2500.0)
+                    s_img = st.file_uploader("**Space Media Image**", type=["png", "jpg", "jpeg"])
 
                     if st.form_submit_button("Add Sub-Space Asset"):
                         if s_name:
@@ -511,7 +512,7 @@ elif user_role == "Venue Operations & Asset Management":
                 spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ? AND is_active = 1", (cur_v['venue_id'],)).fetchall()
                 for sp in spaces:
                     col_sp1, col_sp2 = st.columns([4, 1])
-                    col_sp1.write(f"• **{sp['name']}** — Capacity: {sp['capacity']} | Daily Rate: BWP {sp['daily_rate']:,.2f}")
+                    col_sp1.write(f"• **Sub-Space Name:** {sp['name']} | **Capacity:** {sp['capacity']} | **Daily Rate:** BWP {sp['daily_rate']:,.2f}")
                     if col_sp2.button("🗑️ Deactivate", key=f"del_sp_{sp['space_id']}"):
                         conn.execute("UPDATE spaces SET is_active = 0 WHERE space_id = ?", (sp['space_id'],))
                         conn.commit()
@@ -540,9 +541,9 @@ elif user_role == "Venue Operations & Asset Management":
                     st.success("No pending booking POP submissions.")
                 else:
                     for bk in pending_bks:
-                        st.write(f"**Booking Reference #{bk['booking_id']}** — Client: {bk['customer_name']} | Tariff: BWP {bk['venue_cost']:,.2f}")
+                        st.write(f"**Booking Reference:** #{bk['booking_id']} | **Client:** {bk['customer_name']} | **Tariff:** BWP {bk['venue_cost']:,.2f}")
                         with st.form(f"verify_bk_{bk['booking_id']}"):
-                            ref = st.text_input("Enter WhatsApp Audit Transaction Reference")
+                            ref = st.text_input("**Enter WhatsApp Audit Transaction Reference**")
                             if st.form_submit_button("✅ Verify Settlement"):
                                 if ref:
                                     conn.execute("UPDATE bookings SET status = 'Confirmed / Paid', pop_reference = ? WHERE booking_id = ?", (ref, bk['booking_id']))
@@ -556,9 +557,9 @@ elif user_role == "Venue Operations & Asset Management":
                     st.success("No pending ticket pass submissions.")
                 else:
                     for tkt in pending_tkts:
-                        st.write(f"**Ticket Reference #{tkt['ticket_id']}** ({tkt['event_title']}) — Buyer: {tkt['buyer']} | Paid: BWP {tkt['total_paid']:,.2f}")
+                        st.write(f"**Ticket Reference:** #{tkt['ticket_id']} ({tkt['event_title']}) | **Buyer:** {tkt['buyer']} | **Paid:** BWP {tkt['total_paid']:,.2f}")
                         with st.form(f"verify_tkt_{tkt['ticket_id']}"):
-                            ref = st.text_input("Enter WhatsApp Transaction Reference")
+                            ref = st.text_input("**Enter WhatsApp Transaction Reference**")
                             if st.form_submit_button("✅ Activate Access Ticket"):
                                 if ref:
                                     conn.execute("UPDATE tickets SET status = 'VALID', pop_reference = ? WHERE ticket_id = ?", (ref, tkt['ticket_id']))
@@ -568,12 +569,12 @@ elif user_role == "Venue Operations & Asset Management":
 
             with tab_edit:
                 with st.form("edit_facility_profile"):
-                    u_name = st.text_input("Corporate Venue Name", value=cur_v['name'])
-                    u_phone = st.text_input("Telephone Line", value=cur_v['phone'])
-                    u_wa = st.text_input("WhatsApp Audit Line", value=cur_v['whatsapp_no'])
-                    u_bank = st.text_area("Settlement Details", value=cur_v['bank_details'])
-                    u_color = st.color_picker("Brand Color Theme", value=cur_v['brand_color'])
-                    u_logo = st.file_uploader("Update Corporate Logo", type=["png", "jpg", "jpeg"])
+                    u_name = st.text_input("**Corporate Venue Name**", value=cur_v['name'])
+                    u_phone = st.text_input("**Telephone Line**", value=cur_v['phone'])
+                    u_wa = st.text_input("**WhatsApp Audit Line**", value=cur_v['whatsapp_no'])
+                    u_bank = st.text_area("**Settlement Details**", value=cur_v['bank_details'])
+                    u_color = st.color_picker("**Brand Color Theme**", value=cur_v['brand_color'])
+                    u_logo = st.file_uploader("**Update Corporate Logo**", type=["png", "jpg", "jpeg"])
 
                     if st.form_submit_button("Save Corporate Profile"):
                         logo_url = process_compressed_image_upload(u_logo, cur_v['logo_url'])
@@ -589,7 +590,7 @@ elif user_role == "Venue Operations & Asset Management":
 # 7. MODULE 3: VENDOR PORTAL & SERVICE FULFILLMENT
 # ---------------------------------------------------------
 elif user_role == "Vendor Portal & Service Fulfillment":
-    st.title("Vendor Portal & Service Fulfillment Console")
+    st.markdown("<h1 style='text-align: center;'>Vendor Portal & Service Fulfillment Console</h1>", unsafe_allow_html=True)
     conn = get_db_connection()
 
     if not st.session_state["authenticated"] or st.session_state["user_role"] != "Facility Supporter":
@@ -599,8 +600,8 @@ elif user_role == "Vendor Portal & Service Fulfillment":
         
         with login_tab:
             with st.form("sup_login"):
-                l_email = st.text_input("Corporate Email")
-                l_pw = st.text_input("Account Password", type="password")
+                l_email = st.text_input("**Corporate Email**")
+                l_pw = st.text_input("**Account Password**", type="password")
                 if st.form_submit_button("Authenticate"):
                     user = conn.execute("SELECT * FROM users WHERE email = ? AND password_hash = ? AND role = 'Facility Supporter'",
                                         (l_email, hash_pw(l_pw))).fetchone()
@@ -616,15 +617,15 @@ elif user_role == "Vendor Portal & Service Fulfillment":
 
         with reg_tab:
             with st.form("reg_supporter_auth"):
-                s_name = st.text_input("Trading Entity Name*")
-                s_cat = st.selectbox("Industry Classification", ["Catering & Cutlery", "Stage & Decor", "Sound & AV", "Florist", "Security Services"])
-                s_person = st.text_input("Account Manager / Representative*")
-                s_email = st.text_input("Corporate Email*")
-                s_pw = st.text_input("Account Password*", type="password")
-                s_phone = st.text_input("WhatsApp POP Verification Number*", placeholder="26771234567")
-                s_bank = st.text_area("Settlement Details*")
-                s_color = st.color_picker("Brand Color Theme", "#1E293B")
-                s_logo = st.file_uploader("Corporate Logo", type=["png", "jpg", "jpeg"])
+                s_name = st.text_input("**Trading Entity Name***")
+                s_cat = st.selectbox("**Industry Classification**", ["Catering & Cutlery", "Stage & Decor", "Sound & AV", "Florist", "Security Services"])
+                s_person = st.text_input("**Account Manager / Representative***")
+                s_email = st.text_input("**Corporate Email***")
+                s_pw = st.text_input("**Account Password***", type="password")
+                s_phone = st.text_input("**WhatsApp POP Verification Number***", placeholder="26771234567")
+                s_bank = st.text_area("**Settlement Details***")
+                s_color = st.color_picker("**Brand Color Theme**", "#1E293B")
+                s_logo = st.file_uploader("**Corporate Logo**", type=["png", "jpg", "jpeg"])
 
                 if st.form_submit_button("Register Supplier Profile"):
                     if s_name and s_email and s_pw and s_phone:
@@ -647,8 +648,8 @@ elif user_role == "Vendor Portal & Service Fulfillment":
         if cur_sup:
             st.markdown(f"""
                 <div class="profile-card" style="background:{cur_sup['brand_color']};">
-                    <h2>🚚 {cur_sup['business_name']}</h2>
-                    <p>Industry: {cur_sup['category']} | WhatsApp Verification Line: {cur_sup['phone']}</p>
+                    <h2 style="margin:0;">🚚 {cur_sup['business_name']}</h2>
+                    <p style="margin:0;"><b>Industry:</b> {cur_sup['category']} | <b>WhatsApp Verification Line:</b> {cur_sup['phone']}</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -656,11 +657,11 @@ elif user_role == "Vendor Portal & Service Fulfillment":
 
             with vtab1:
                 with st.form("add_pkg_form"):
-                    i_name = st.text_input("Service Offering Title*")
-                    i_desc = st.text_area("Service Specifications")
-                    i_type = st.selectbox("Unit Metric Tariff", ["Per Guest", "Per Day", "Flat Rate", "Per Hour"])
-                    i_price = st.number_input("Unit Tariff Price (BWP)", min_value=1.0, value=150.0)
-                    i_photo = st.file_uploader("Service Media Graphic", type=["png", "jpg", "jpeg"])
+                    i_name = st.text_input("**Service Offering Title***")
+                    i_desc = st.text_area("**Service Specifications**")
+                    i_type = st.selectbox("**Unit Metric Tariff**", ["Per Guest", "Per Day", "Flat Rate", "Per Hour"])
+                    i_price = st.number_input("**Unit Tariff Price (BWP)**", min_value=1.0, value=150.0)
+                    i_photo = st.file_uploader("**Service Media Graphic**", type=["png", "jpg", "jpeg"])
 
                     if st.form_submit_button("Publish Service Offering"):
                         if i_name:
@@ -677,7 +678,7 @@ elif user_role == "Vendor Portal & Service Fulfillment":
                 templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ? AND is_active = 1", (cur_sup['supporter_id'],)).fetchall()
                 for t in templates:
                     col_t1, col_t2 = st.columns([4, 1])
-                    col_t1.write(f"• **{t['item_name']}** — Price: BWP {t['unit_price']:,.2f} / {t['unit_type']}")
+                    col_t1.write(f"• **Item:** {t['item_name']} | **Price:** BWP {t['unit_price']:,.2f} / {t['unit_type']}")
                     if col_t2.button("🗑️ Deactivate", key=f"del_item_{t['template_id']}"):
                         conn.execute("UPDATE vendor_templates SET is_active = 0 WHERE template_id = ?", (t['template_id'],))
                         conn.commit()
@@ -689,9 +690,9 @@ elif user_role == "Vendor Portal & Service Fulfillment":
                     st.success("No pending invoice settlements.")
                 else:
                     for inv in v_invs:
-                        st.write(f"**Invoice Reference #{inv['vendor_invoice_id']}** — Billed To: {inv['customer_name']} | Amount: BWP {inv['total_amount']:,.2f}")
+                        st.write(f"**Invoice Reference:** #{inv['vendor_invoice_id']} | **Billed To:** {inv['customer_name']} | **Amount:** BWP {inv['total_amount']:,.2f}")
                         with st.form(f"verify_vinv_{inv['vendor_invoice_id']}"):
-                            ref = st.text_input("Enter WhatsApp Settlement Reference")
+                            ref = st.text_input("**Enter WhatsApp Settlement Reference**")
                             if st.form_submit_button("✅ Confirm Payment"):
                                 if ref:
                                     conn.execute("UPDATE vendor_invoices SET status = 'PAID & VERIFIED', pop_reference = ? WHERE vendor_invoice_id = ?", (ref, inv['vendor_invoice_id']))
@@ -701,10 +702,10 @@ elif user_role == "Vendor Portal & Service Fulfillment":
 
             with vtab3:
                 with st.form("edit_vendor_profile"):
-                    u_phone = st.text_input("WhatsApp Line", value=cur_sup['phone'])
-                    u_bank = st.text_area("Settlement Account Details", value=cur_sup['bank_details'])
-                    u_color = st.color_picker("Brand Color Theme", value=cur_sup['brand_color'])
-                    u_logo = st.file_uploader("Update Corporate Logo", type=["png", "jpg", "jpeg"])
+                    u_phone = st.text_input("**WhatsApp Line**", value=cur_sup['phone'])
+                    u_bank = st.text_area("**Settlement Account Details**", value=cur_sup['bank_details'])
+                    u_color = st.color_picker("**Brand Color Theme**", value=cur_sup['brand_color'])
+                    u_logo = st.file_uploader("**Update Corporate Logo**", type=["png", "jpg", "jpeg"])
 
                     if st.form_submit_button("Save Setup"):
                         logo_url = process_compressed_image_upload(u_logo, cur_sup['logo_url'])
@@ -720,13 +721,13 @@ elif user_role == "Vendor Portal & Service Fulfillment":
 # 8. MODULE 4: ACCESS CONTROL & VERIFICATION SUITE
 # ---------------------------------------------------------
 elif user_role == "Access Control & Verification Suite":
-    st.title("Access Control & Mobile Verification Suite")
-    st.caption("Point optical device camera at attendee QR passes or input verification hashes.")
+    st.markdown("<h1 style='text-align: center;'>Access Control & Mobile Verification Suite</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'><b>Point optical device camera at attendee QR passes or input verification hashes.</b></p>", unsafe_allow_html=True)
     st.divider()
 
     conn = get_db_connection()
-    camera_file = st.camera_input("Align guest QR barcode pass within frame")
-    scan_input = st.text_input("Or Enter Verification Hash manually:")
+    camera_file = st.camera_input("**Align guest QR barcode pass within frame**")
+    scan_input = st.text_input("**Or Enter Verification Hash manually:**")
 
     if st.button("Authenticate Pass Entry", type="primary"):
         target_str = scan_input.strip().upper()
@@ -749,8 +750,8 @@ elif user_role == "Access Control & Verification Suite":
 # 9. MODULE 5: EXECUTIVE MASTER LEDGER & AUDIT SUITE (LOCKED)
 # ---------------------------------------------------------
 elif user_role == "Executive Master Ledger & Audit Suite":
-    st.title("Executive Master Ledger & Audit Suite")
-    st.caption("Global platform analytics, system logs, and entity ledgers.")
+    st.markdown("<h1 style='text-align: center;'>Executive Master Ledger & Audit Suite</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'><b>Global platform analytics, system logs, and entity ledgers.</b></p>", unsafe_allow_html=True)
     st.divider()
 
     # SECURE MASTER ADMIN AUTHENTICATION GATE
@@ -760,8 +761,8 @@ elif user_role == "Executive Master Ledger & Audit Suite":
         st.info("🔒 Platform Executive Master Administrator Access Required")
         
         with st.form("master_admin_login"):
-            a_email = st.text_input("Master Admin Email")
-            a_pw = st.text_input("Executive Master Password", type="password")
+            a_email = st.text_input("**Master Admin Email**")
+            a_pw = st.text_input("**Executive Master Password**", type="password")
             
             if st.form_submit_button("Authenticate Executive Access", type="primary"):
                 if hash_pw(a_pw) == MASTER_ADMIN_PASSWORD_HASH:
