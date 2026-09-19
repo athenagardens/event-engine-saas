@@ -3,3 +3,4 @@ pandas
 reportlab
 groq
 qrcode
+fpdf2
