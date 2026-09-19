@@ -37,10 +37,6 @@ def inject_custom_css():
             .stButton>button:hover {
                 background-color: #1D4ED8;
             }
-            .stDeleteButton>button {
-                background-color: #DC2626 !important;
-                color: white !important;
-            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -58,6 +54,7 @@ def load_data():
                     "name": "Royal Aria Convention Center",
                     "address": "Plot 102, Tlokweng Road, Gaborone",
                     "manager_email": "admin@royalaria.bw",
+                    "status": "Active",
                     "flyer_image_url": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800",
                     "spaces": [
                         {"space_id": "sp_full", "name": "Full Arena & Grounds", "capacity": 5000, "daily_rate": 30000.0},
@@ -85,6 +82,7 @@ def load_data():
                     "name": "Kalahari Floral & Decor Studios",
                     "category": "Florists & Decorators",
                     "email": "contact@kalaharidecor.bw",
+                    "status": "Active",
                     "catalogue": [
                         {"item_id": "itm_fl_01", "name": "Stage Floral Arch & Pedestals", "price": 4500.0, "unit": "per setup"},
                         {"item_id": "itm_fl_02", "name": "VIP Table Centerpieces", "price": 350.0, "unit": "per table"},
@@ -100,7 +98,12 @@ def load_data():
             json.dump(default_data, f, indent=4)
         return default_data
     with open(DB_FILE, "r") as f:
-        return json.load(f)
+        data = json.load(f)
+        for v in data.get("venues", []):
+            if "status" not in v: v["status"] = "Active"
+        for s in data.get("suppliers", []):
+            if "status" not in s: s["status"] = "Active"
+        return data
 
 def save_data(data):
     with open(DB_FILE, "w") as f:
@@ -160,6 +163,8 @@ if param_facility or param_event:
     # Scenario A: Event Flyer Link
     if target_event:
         v_host = next((v for v in db["venues"] if v["venue_id"] == target_event["venue_id"]), None)
+        is_suspended = (v_host and v_host.get("status") == "Suspended")
+
         st.subheader("Digital Interactive Flyer & Ticket Portal")
         st.caption(f"Hosted at: **{v_host['name'] if v_host else 'Partner Facility'}**")
         st.divider()
@@ -194,30 +199,35 @@ if param_facility or param_event:
                                 "ticket_id": f"tkt_{len(db['ticket_orders'])+1001}",
                                 "event_id": target_event["event_id"],
                                 "event_title": target_event["title"],
+                                "venue_id": target_event["venue_id"],
                                 "customer_name": buyer_name,
                                 "customer_email": buyer_email,
                                 "quantity": qty,
                                 "total_paid": total_cost,
-                                "purchase_date": str(date.today())
+                                "purchase_date": str(date.today()),
+                                "locked_due_to_suspension": is_suspended
                             }
                             db["ticket_orders"].append(tkt_obj)
                             save_data(db)
 
-                            pdf_tkt = generate_pdf(
-                                document_title="Digital Entry Ticket Pass",
-                                fields_dict={
-                                    "Ticket ID": tkt_obj["ticket_id"],
-                                    "Attendee Name": buyer_name,
-                                    "Event Title": target_event["title"],
-                                    "Facility": v_host['name'] if v_host else 'Venue',
-                                    "Date": target_event["date"],
-                                    "Pass Quantity": f"{qty} Pass(es)",
-                                    "Total Paid": f"BWP {total_cost:,.2f}"
-                                },
-                                footer_note="Present barcode / digital PDF pass at facility gate for entry verification."
-                            )
-                            st.success("Ticket Issued Successfully!")
-                            st.download_button("Download Digital Ticket PDF", pdf_tkt, f"Ticket_{tkt_obj['ticket_id']}.pdf", "application/pdf")
+                            if is_suspended:
+                                st.warning("We've Got Your Request! Your booking details are saved. We are just waiting on the facility owner to finalize their portal account details on their end.")
+                            else:
+                                pdf_tkt = generate_pdf(
+                                    document_title="Digital Entry Ticket Pass",
+                                    fields_dict={
+                                        "Ticket ID": tkt_obj["ticket_id"],
+                                        "Attendee Name": buyer_name,
+                                        "Event Title": target_event["title"],
+                                        "Facility": v_host['name'] if v_host else 'Venue',
+                                        "Date": target_event["date"],
+                                        "Pass Quantity": f"{qty} Pass(es)",
+                                        "Total Paid": f"BWP {total_cost:,.2f}"
+                                    },
+                                    footer_note="Present barcode / digital PDF pass at facility gate for entry verification."
+                                )
+                                st.success("Ticket Issued Successfully!")
+                                st.download_button("Download Digital Ticket PDF", pdf_tkt, f"Ticket_{tkt_obj['ticket_id']}.pdf", "application/pdf")
                         else:
                             st.error("Name and Email required.")
             else:
@@ -225,6 +235,8 @@ if param_facility or param_event:
 
     # Scenario B: Facility Hire Link
     elif target_venue:
+        is_suspended = (target_venue.get("status") == "Suspended")
+
         st.title(f"Welcome to {target_venue['name']}")
         st.caption(f"Physical Address: {target_venue['address']}")
         st.divider()
@@ -255,13 +267,15 @@ if param_facility or param_event:
             selected_supp_items = []
             supp_cost = 0.0
 
-            for sup in db["suppliers"]:
-                st.write(f"**{sup['name']}** *({sup['category']})*")
-                for item in sup.get("catalogue", []):
-                    chk_item = st.checkbox(f"{item['name']} — BWP {item['price']:,.2f} ({item['unit']})", key=f"cust_{item['item_id']}")
-                    if chk_item:
-                        selected_supp_items.append({"supplier_name": sup["name"], "item_name": item["name"], "price": item["price"]})
-                        supp_cost += item["price"]
+            active_suppliers = db["suppliers"]
+            if active_suppliers:
+                for sup in active_suppliers:
+                    st.write(f"**{sup['name']}** *({sup['category']})*")
+                    for item in sup.get("catalogue", []):
+                        chk_item = st.checkbox(f"{item['name']} — BWP {item['price']:,.2f} ({item['unit']})", key=f"cust_{item['item_id']}")
+                        if chk_item:
+                            selected_supp_items.append({"supplier_name": sup["name"], "item_name": item["name"], "price": item["price"]})
+                            supp_cost += item["price"]
 
         if selected_spaces:
             st.divider()
@@ -285,32 +299,35 @@ if param_facility or param_event:
                             "booked_spaces": [s["name"] for s in selected_spaces],
                             "supplier_items": [i["item_name"] for i in selected_supp_items],
                             "total_amount": grand_total,
-                            "status": "Quotation Pending Acceptance"
+                            "status": "Quotation Pending Acceptance",
+                            "locked_due_to_suspension": is_suspended
                         }
                         db["facility_bookings"].append(bk_obj)
                         save_data(db)
 
-                        pdf_quote = generate_pdf(
-                            document_title="Facility Hire Official Quotation",
-                            fields_dict={
-                                "Quotation Reference": bk_obj["booking_id"],
-                                "Customer": c_name,
-                                "Facility": target_venue["name"],
-                                "Reserved Date": str(res_date),
-                                "Spaces Selected": ", ".join(bk_obj["booked_spaces"]),
-                                "Supplier Add-ons": ", ".join(bk_obj["supplier_items"]) if bk_obj["supplier_items"] else "None",
-                                "Quoted Total": f"BWP {grand_total:,.2f}"
-                            },
-                            notes_text="This quotation is valid for 7 days. Accept quote to receive invoice for payment."
-                        )
-
-                        st.success("Quotation & Hire Request Issued!")
-                        st.download_button("Download Official Quotation PDF", pdf_quote, f"Quotation_{bk_obj['booking_id']}.pdf", "application/pdf")
+                        if is_suspended:
+                            st.warning("We've Got Your Request! Your booking details are saved. We are just waiting on the facility owner to finalize their portal account details on their end.")
+                        else:
+                            pdf_quote = generate_pdf(
+                                document_title="Facility Hire Official Quotation",
+                                fields_dict={
+                                    "Quotation Reference": bk_obj["booking_id"],
+                                    "Customer": c_name,
+                                    "Facility": target_venue["name"],
+                                    "Reserved Date": str(res_date),
+                                    "Spaces Selected": ", ".join(bk_obj["booked_spaces"]),
+                                    "Supplier Add-ons": ", ".join(bk_obj["supplier_items"]) if bk_obj["supplier_items"] else "None",
+                                    "Quoted Total": f"BWP {grand_total:,.2f}"
+                                },
+                                notes_text="This quotation is valid for 7 days. Accept quote to receive invoice for payment."
+                            )
+                            st.success("Quotation & Hire Request Issued!")
+                            st.download_button("Download Official Quotation PDF", pdf_quote, f"Quotation_{bk_obj['booking_id']}.pdf", "application/pdf")
                     else:
                         st.error("Name and Email required.")
 
 # =========================================================
-# ROUTE 2: MANAGEMENT CONSOLE WITH EDIT & DELETE CONTROLS
+# ROUTE 2: MANAGEMENT CONSOLE WITH PAYMENT LOCK SYSTEM
 # =========================================================
 else:
     st.sidebar.markdown("### Role Portal Switcher")
@@ -341,6 +358,20 @@ else:
         else:
             active_v_name = st.selectbox("Active Facility Managed", v_list)
 
+        if active_v_name:
+            cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
+            is_v_suspended = (cur_v.get("status") == "Suspended")
+
+            # Check locked pending bookings
+            locked_bks = [b for b in db["facility_bookings"] if b["venue_id"] == cur_v["venue_id"] and b.get("locked_due_to_suspension", False)]
+            locked_tkts = [t for t in db["ticket_orders"] if t.get("venue_id") == cur_v["venue_id"] and t.get("locked_due_to_suspension", False)]
+            total_locked = len(locked_bks) + len(locked_tkts)
+
+            if is_v_suspended:
+                st.error(f"🔴 ACCOUNT SUSPENDED (UNPAID PLATFORM INVOICE)\n\n"
+                         f"You currently have **{total_locked} customer booking(s) / ticket order(s)** locked in the system! "
+                         f"To access your customer details and release their bookings, please settle your monthly platform payment with the administrator.")
+
         t_config, t_events, t_flyers, t_bookings = st.tabs([
             "Configure Venue & Spaces",
             "Events & Ticket Setup",
@@ -356,7 +387,7 @@ else:
                     fe = st.text_input("Manager Email")
                     ff = st.text_input("Main Flyer Image URL", value="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800")
                     if st.form_submit_button("Save Facility Profile"):
-                        new_fac = {"venue_id": f"v_{len(db['venues'])+101}", "name": fn, "address": fa, "manager_email": fe, "flyer_image_url": ff, "spaces": []}
+                        new_fac = {"venue_id": f"v_{len(db['venues'])+101}", "name": fn, "address": fa, "manager_email": fe, "status": "Active", "flyer_image_url": ff, "spaces": []}
                         db["venues"].append(new_fac)
                         save_data(db)
                         st.success(f"Facility '{fn}' registered!")
@@ -391,14 +422,6 @@ else:
                 else:
                     st.caption("No sub-spaces added yet.")
 
-                st.divider()
-                with st.expander("🗑️ Delete Entire Facility Profile"):
-                    if st.button(f"Delete Facility '{cur_v['name']}' Permanently"):
-                        db["venues"] = [v for v in db["venues"] if v["venue_id"] != cur_v["venue_id"]]
-                        save_data(db)
-                        st.error(f"Facility '{cur_v['name']}' deleted!")
-                        st.rerun()
-
         with t_events:
             if active_v_name:
                 cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
@@ -422,21 +445,6 @@ else:
                         save_data(db)
                         st.success(f"Event '{et}' published!")
                         st.rerun()
-
-                st.divider()
-                st.markdown("##### Existing Events (Manage / Delete)")
-                v_events = [e for e in db["events"] if e["venue_id"] == cur_v["venue_id"]]
-                if v_events:
-                    for idx, e in enumerate(v_events):
-                        ce1, ce2, ce3, ce4 = st.columns([3, 2, 2, 1])
-                        ce1.write(f"**{e['title']}** ({e['date']})")
-                        ce2.write(f"Price: BWP {e['ticket_price']:,.2f}")
-                        ce3.write(f"Sold: {e['tickets_sold']}/{e['tickets_total']}")
-                        if ce4.button("Delete", key=f"del_evt_{e['event_id']}"):
-                            db["events"] = [item for item in db["events"] if item["event_id"] != e["event_id"]]
-                            save_data(db)
-                            st.warning(f"Deleted Event '{e['title']}'")
-                            st.rerun()
 
         with t_flyers:
             if active_v_name:
@@ -462,25 +470,34 @@ else:
                         st.markdown(f'<a href="https://wa.me/?text={wa_evt_msg}" target="_blank"><button style="width:100%; height:40px;">Share Event Ticket on WhatsApp</button></a>', unsafe_allow_html=True)
 
         with t_bookings:
-            st.markdown("##### Hire Orders Log (Manage / Delete)")
-            if db["facility_bookings"]:
-                for idx, bk in enumerate(db["facility_bookings"]):
-                    cb1, cb2, cb3, cb4 = st.columns([3, 2, 2, 1])
-                    cb1.write(f"**{bk['customer_name']}** ({bk['venue_name']})")
-                    cb2.write(f"Date: {bk['hire_date']}")
-                    cb3.write(f"BWP {bk['total_amount']:,.2f}")
-                    if cb4.button("Cancel / Delete", key=f"del_bk_{bk['booking_id']}"):
-                        db["facility_bookings"].pop(idx)
-                        save_data(db)
-                        st.warning(f"Booking {bk['booking_id']} removed!")
-                        st.rerun()
+            if active_v_name:
+                cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
+                is_v_suspended = (cur_v.get("status") == "Suspended")
+
+                if is_v_suspended:
+                    st.error("🔒 BOOKINGS LOCKED: Pay your platform monthly subscription invoice to unlock customer details and confirm pending bookings.")
+                else:
+                    st.markdown("##### Active Hire Orders Log")
+                    v_bks = [b for b in db["facility_bookings"] if b["venue_id"] == cur_v["venue_id"]]
+                    if v_bks:
+                        for idx, bk in enumerate(v_bks):
+                            cb1, cb2, cb3, cb4 = st.columns([3, 2, 2, 1])
+                            cb1.write(f"**{bk['customer_name']}** ({bk['customer_email']})")
+                            cb2.write(f"Date: {bk['hire_date']}")
+                            cb3.write(f"BWP {bk['total_amount']:,.2f}")
+                            if cb4.button("Cancel", key=f"del_bk_{bk['booking_id']}"):
+                                db["facility_bookings"] = [b for b in db["facility_bookings"] if b["booking_id"] != bk["booking_id"]]
+                                save_data(db)
+                                st.warning("Booking removed!")
+                                st.rerun()
+                    else:
+                        st.info("No active facility bookings found.")
 
     # -----------------------------------------------------
     # PLAYER ROLE B: FACILITY SUPPORTER (SUPPLIER)
     # -----------------------------------------------------
     elif user_role == "Facility Supporter (Supplier)":
         st.subheader("Facility Supporter Catalogue Console")
-        st.caption("Showcase florists, decor, cakes, and catering items for facility hires.")
 
         s_list = [s["name"] for s in db["suppliers"]]
         if not s_list:
@@ -488,6 +505,11 @@ else:
             active_s_name = None
         else:
             active_s_name = st.selectbox("Active Supporter Profile", s_list)
+
+        if active_s_name:
+            cur_s = next(s for s in db["suppliers"] if s["name"] == active_s_name)
+            if cur_s.get("status") == "Suspended":
+                st.error("🔴 ACCOUNT SUSPENDED: Settle outstanding monthly billing invoices with the system admin to unlock supplier requests.")
 
         tab_s_reg, t_cat = st.tabs(["Register Profile", "Manage Catalogue & Pricing"])
 
@@ -497,7 +519,7 @@ else:
                 sc = st.selectbox("Category", ["Florists & Decorators", "Catering & Cakes", "Audio, Visual & DJ", "Security & Support Services"])
                 se = st.text_input("Contact Email")
                 if st.form_submit_button("Register Supporter Profile"):
-                    db["suppliers"].append({"supplier_id": f"sup_{len(db['suppliers'])+101}", "name": sn, "category": sc, "email": se, "catalogue": []})
+                    db["suppliers"].append({"supplier_id": f"sup_{len(db['suppliers'])+101}", "name": sn, "category": sc, "email": se, "status": "Active", "catalogue": []})
                     save_data(db)
                     st.success("Profile Created!")
                     st.rerun()
@@ -507,7 +529,7 @@ else:
                 cur_s = next(s for s in db["suppliers"] if s["name"] == active_s_name)
                 with st.form("add_cat_item"):
                     st.markdown(f"##### Add Item to {cur_s['name']} Catalogue")
-                    iname = st.text_input("Item / Service Name (e.g. 3-Tier Wedding Cake, Stage Florals)")
+                    iname = st.text_input("Item / Service Name")
                     iprice = st.number_input("Unit Price (BWP)", min_value=0.0, value=1500.0)
                     iunit = st.text_input("Unit Type", value="per event")
                     if st.form_submit_button("Add Catalogue Item"):
@@ -516,35 +538,11 @@ else:
                         st.success(f"Item '{iname}' added!")
                         st.rerun()
 
-                st.divider()
-                st.markdown("##### Active Catalogue Items (Manage / Delete)")
-                if cur_s["catalogue"]:
-                    for idx, item in enumerate(cur_s["catalogue"]):
-                        cs1, cs2, cs3, cs4 = st.columns([3, 2, 2, 1])
-                        cs1.write(f"**{item['name']}**")
-                        cs2.write(f"BWP {item['price']:,.2f}")
-                        cs3.write(f"Unit: {item['unit']}")
-                        if cs4.button("Delete Item", key=f"del_itm_{item['item_id']}"):
-                            cur_s["catalogue"].pop(idx)
-                            save_data(db)
-                            st.warning(f"Deleted {item['name']}")
-                            st.rerun()
-                else:
-                    st.caption("No catalogue items added yet.")
-
-                st.divider()
-                with st.expander("🗑️ Delete Entire Supporter Profile"):
-                    if st.button(f"Delete Supporter '{cur_s['name']}' Permanently"):
-                        db["suppliers"] = [s for s in db["suppliers"] if s["supplier_id"] != cur_s["supplier_id"]]
-                        save_data(db)
-                        st.error(f"Supporter profile '{cur_s['name']}' deleted!")
-                        st.rerun()
-
     # -----------------------------------------------------
     # PLAYER ROLE C: SUPER USER (PLATFORM OWNER)
     # -----------------------------------------------------
     elif user_role == "Super User (Platform Owner)":
-        st.subheader("Platform Administration & Monthly Invoicing")
+        st.subheader("Platform Administration & Account Control")
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Registered Facilities", len(db["venues"]))
@@ -552,7 +550,61 @@ else:
         m3.metric("Facility Bookings", len(db["facility_bookings"]))
         m4.metric("Ticket Sales Ledger", len(db["ticket_orders"]))
 
-        tab_inv, tab_logs = st.tabs(["Monthly Portal Invoicing", "System Records & Purge"])
+        tab_susp, tab_inv, tab_logs = st.tabs([
+            "Account Suspensions",
+            "Monthly Portal Invoicing",
+            "System Records & Purge"
+        ])
+
+        with tab_susp:
+            st.markdown("##### Manage Account Status & Automatic Payment Lock Controls")
+            st.caption("When suspended, customer bookings continue to accumulate in secret, prompting non-paying accounts to pay up to see their orders.")
+
+            st.markdown("### 1. Facilities (Venues)")
+            for v in db["venues"]:
+                col_v1, col_v2, col_v3 = st.columns([3, 2, 2])
+                col_v1.write(f"**{v['name']}** ({v['manager_email']})")
+                status_color = "🔴 Suspended" if v.get("status") == "Suspended" else "🟢 Active"
+                col_v2.write(f"Status: **{status_color}**")
+                
+                if v.get("status") == "Suspended":
+                    if col_v3.button("Reactivate & Release Bookings", key=f"react_v_{v['venue_id']}"):
+                        v["status"] = "Active"
+                        # Unlock hidden bookings
+                        for b in db["facility_bookings"]:
+                            if b["venue_id"] == v["venue_id"]: b["locked_due_to_suspension"] = False
+                        for t in db["ticket_orders"]:
+                            if t.get("venue_id") == v["venue_id"]: t["locked_due_to_suspension"] = False
+                        save_data(db)
+                        st.success(f"Reactivated {v['name']}! All hidden bookings are now visible to venue.")
+                        st.rerun()
+                else:
+                    if col_v3.button("Suspend Venue (Non-Payment)", key=f"susp_v_{v['venue_id']}"):
+                        v["status"] = "Suspended"
+                        save_data(db)
+                        st.warning(f"Suspended {v['name']}")
+                        st.rerun()
+
+            st.divider()
+            st.markdown("### 2. Facility Supporters (Suppliers)")
+            for s in db["suppliers"]:
+                col_s1, col_s2, col_s3 = st.columns([3, 2, 2])
+                col_s1.write(f"**{s['name']}** ({s['email']})")
+                status_color = "🔴 Suspended" if s.get("status") == "Suspended" else "🟢 Active"
+                col_s2.write(f"Status: **{status_color}**")
+
+                if s.get("status") == "Suspended":
+                    if col_s3.button("Reactivate Supporter", key=f"react_s_{s['supplier_id']}"):
+                        s["status"] = "Active"
+                        save_data(db)
+                        st.success(f"Reactivated {s['name']}")
+                        st.rerun()
+                else:
+                    if col_s3.button("Suspend Supporter (Non-Payment)", key=f"susp_s_{s['supplier_id']}"):
+                        s["status"] = "Suspended"
+                        save_data(db)
+                        st.warning(f"Suspended {s['name']}")
+                        st.rerun()
 
         with tab_inv:
             st.markdown("##### Issue Monthly Portal Billing Invoice")
@@ -560,10 +612,7 @@ else:
 
             with col_i1:
                 target_type = st.radio("Bill Recipient Type", ["Facility Owner", "Facility Supporter"])
-                if target_type == "Facility Owner":
-                    recipient_name = st.selectbox("Select Facility", [v["name"] for v in db["venues"]])
-                else:
-                    recipient_name = st.selectbox("Select Supporter", [s["name"] for s in db["suppliers"]])
+                recipient_name = st.selectbox("Select Billed Entity", [v["name"] for v in db["venues"]] if target_type == "Facility Owner" else [s["name"] for s in db["suppliers"]])
 
             with col_i2:
                 sub_fee = st.number_input("Monthly Subscription Fee (BWP)", min_value=0.0, value=1500.0)
@@ -592,44 +641,20 @@ else:
                             "Date Issued": str(date.today()),
                             "Total Payable": f"BWP {sub_fee:,.2f}"
                         },
-                        footer_note="Payment due within 15 days of invoice date. Thank you for using the platform."
+                        footer_note="Payment due within 15 days of invoice date. Non-payment locks customer booking access."
                     )
                     st.success(f"Invoice {inv_obj['invoice_id']} issued to {recipient_name}!")
-                    st.download_button("Download Official Subscription Invoice PDF", pdf_inv, f"Invoice_{inv_obj['invoice_id']}.pdf", "application/pdf")
+                    st.download_button("Download Subscription Invoice PDF", pdf_inv, f"Invoice_{inv_obj['invoice_id']}.pdf", "application/pdf")
 
         with tab_logs:
-            st.markdown("##### Master Invoices History (Manage / Delete)")
-            if db["platform_invoices"]:
-                for idx, inv in enumerate(db["platform_invoices"]):
-                    ci1, ci2, ci3, ci4 = st.columns([3, 2, 2, 1])
-                    ci1.write(f"**{inv['recipient']}** ({inv['period']})")
-                    ci2.write(f"Type: {inv['type']}")
-                    ci3.write(f"BWP {inv['amount']:,.2f}")
-                    if ci4.button("Void / Delete", key=f"del_inv_{inv['invoice_id']}"):
-                        db["platform_invoices"].pop(idx)
-                        save_data(db)
-                        st.warning(f"Deleted Invoice {inv['invoice_id']}")
-                        st.rerun()
-
-            st.divider()
-            st.markdown("##### Master Ticket Orders Ledger (Manage / Delete)")
-            if db["ticket_orders"]:
-                for idx, tkt in enumerate(db["ticket_orders"]):
-                    ct1, ct2, ct3, ct4 = st.columns([3, 2, 2, 1])
-                    ct1.write(f"**{tkt['customer_name']}** ({tkt['event_title']})")
-                    ct2.write(f"Qty: {tkt['quantity']}")
-                    ct3.write(f"BWP {tkt['total_paid']:,.2f}")
-                    if ct4.button("Delete Ticket", key=f"del_tkt_{tkt['ticket_id']}"):
-                        db["ticket_orders"].pop(idx)
-                        save_data(db)
-                        st.warning(f"Deleted Ticket {tkt['ticket_id']}")
-                        st.rerun()
+            st.markdown("##### Master System Record Log")
+            st.json(db)
 
     # -----------------------------------------------------
     # PLAYER ROLE D: CUSTOMER MARKETPLACE SEARCH
     # -----------------------------------------------------
     elif user_role == "Customer Marketplace Search":
-        st.subheader("Browse Facilities, Public Events & Suppliers")
+        st.subheader("Browse Facilities & Public Events")
 
         t_search_fac, t_search_evt = st.tabs(["Browse Facilities for Hire", "Browse Public Events"])
 
