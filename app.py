@@ -26,7 +26,7 @@ def save_data(data):
 db = load_data()
 
 # ---------------------------------------------------------
-# 2. APP CONFIGURATION & DYNAMIC CSS INJECTION
+# 2. APP CONFIGURATION & STYLES
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Enterprise Venue & Event Management Gateway",
@@ -51,9 +51,8 @@ def inject_enterprise_styles():
             }
             .ticket-card {
                 background: #FFFFFF; padding: 1.5rem; border-radius: 8px;
-                border-left: 6px solid #2563EB; border-top: 1px solid #E2E8F0;
-                border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.04); margin-bottom: 1rem;
+                border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 1rem;
             }
             .profile-card {
                 padding: 1.8rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1.5rem;
@@ -62,12 +61,14 @@ def inject_enterprise_styles():
                 background-color: #059669; color: #FFFFFF; padding: 0.25rem 0.6rem;
                 border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
             }
+            .logo-img {
+                max-height: 60px; max-width: 180px; object-fit: contain;
+            }
         </style>
     """, unsafe_allow_html=True)
 
 inject_enterprise_styles()
 
-# Helper for processing custom image uploads to base64 data URLs
 def process_image_upload(uploaded_file, fallback_url):
     if uploaded_file is not None:
         try:
@@ -79,8 +80,18 @@ def process_image_upload(uploaded_file, fallback_url):
             return fallback_url
     return fallback_url
 
+# Free Royalty-Free Unsplash Stock Presets
+SPACE_PRESETS = [
+    "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=500",
+    "https://images.unsplash.com/photo-1511578314322-379afb476865?w=500",
+    "https://images.unsplash.com/photo-1431540015161-0bf868a2d407?w=500",
+    "https://images.unsplash.com/photo-1540575861501-7cf05a4b125a?w=500"
+]
+
+DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200"
+
 # ---------------------------------------------------------
-# 3. SIDEBAR NAVIGATION & UTILITIES
+# 3. SIDEBAR NAVIGATION
 # ---------------------------------------------------------
 st.sidebar.markdown("## 🏢 ENTERPRISE GATEWAY")
 st.sidebar.caption("Venue Operations, Ticketing & Service Procurement Platform")
@@ -106,7 +117,7 @@ with st.sidebar.expander("System Utilities"):
         st.rerun()
 
 # ---------------------------------------------------------
-# 4. MODULE 1: PUBLIC PORTAL (BOOKINGS, TICKETS & DEEPLINKS)
+# 4. MODULE 1: PUBLIC PORTAL (BOOKINGS, TICKETS & INVOICES)
 # ---------------------------------------------------------
 if user_role == "Public Portal (Bookings & Ticketing)":
     st.title("Central Venue Booking & Public Ticketing Console")
@@ -115,12 +126,10 @@ if user_role == "Public Portal (Bookings & Ticketing)":
 
     public_tab1, public_tab2 = st.tabs(["Book Venue & Instant Quotation", "Public Event Ticket Shop"])
 
-    # -----------------------------------------------------
-    # TAB A: AUTOMATED VENUE & SUPPLIER QUOTATION ENGINE
-    # -----------------------------------------------------
+    # --- TAB A: VENUE BOOKING & BRANDED INVOICE ---
     with public_tab1:
         st.markdown("### Automated Venue & Services Reservation")
-        st.info("Direct digital booking console. Select your date, hall, and supplier packages to generate an instant quotation, lock dates, and receive a branded invoice.")
+        st.info("Direct digital booking console. Select your date, hall, and supplier packages to generate an instant quotation and locked date invoice.")
 
         venues_list = db.get("venues", [])
         if not venues_list:
@@ -128,7 +137,6 @@ if user_role == "Public Portal (Bookings & Ticketing)":
         else:
             venue_names = [v.get("name", "Unnamed Facility") for v in venues_list]
             
-            # Check query params for direct deeplinking from shared flyers
             query_params = st.query_params
             default_index = 0
             if "venue_id" in query_params:
@@ -140,15 +148,19 @@ if user_role == "Public Portal (Bookings & Ticketing)":
 
             v_brand_color = sel_venue.get("brand_color", "#0F172A")
             v_secondary_color = sel_venue.get("brand_secondary", "#2563EB")
+            v_logo = sel_venue.get("logo_url", DEFAULT_LOGO)
 
             col_v1, col_v2 = st.columns([1, 2])
             with col_v1:
-                st.image(sel_venue.get("flyer_image_url", "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800"), use_container_width=True)
+                st.image(sel_venue.get("flyer_image_url", SPACE_PRESETS[0]), use_container_width=True)
             with col_v2:
                 st.markdown(f"""
                     <div style="background-color: {v_brand_color}; padding: 1.2rem; border-radius: 8px; color: #FFFFFF;">
-                        <h3 style="color: #FFFFFF !important; margin: 0;">{sel_venue.get('name')}</h3>
-                        <p style="color: #F1F5F9 !important; margin-top: 5px; font-size: 0.9rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3 style="color: #FFFFFF !important; margin: 0;">{sel_venue.get('name')}</h3>
+                            <img src="{v_logo}" class="logo-img" style="border-radius: 4px; background: white; padding: 2px;">
+                        </div>
+                        <p style="color: #F1F5F9 !important; margin-top: 10px; font-size: 0.9rem;">
                             <b>Location:</b> {sel_venue.get('address')} | <b>Category:</b> {sel_venue.get('type')}<br>
                             <b>Max Guest Occupancy:</b> {sel_venue.get('max_capacity'):,} Guests
                         </p>
@@ -162,6 +174,15 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                 st.divider()
                 st.markdown("### 2. Select Space & Reserve Date")
                 
+                # Show Sub-Space Thumbnails
+                st.markdown("##### Available Venue Sections / Spaces:")
+                sp_cols = st.columns(min(len(spaces), 4))
+                for idx, sp in enumerate(spaces):
+                    with sp_cols[idx % 4]:
+                        sp_img = sp.get("image_url", SPACE_PRESETS[0])
+                        st.image(sp_img, use_container_width=True)
+                        st.caption(f"**{sp.get('name')}**\n\nCap: {sp.get('capacity')} | BWP {sp.get('daily_rate'):,.2f}/day")
+
                 sp_col1, sp_col2, sp_col3 = st.columns(3)
                 with sp_col1:
                     space_opts = [s.get("name") for s in spaces]
@@ -174,7 +195,6 @@ if user_role == "Public Portal (Bookings & Ticketing)":
 
                 space_total = sel_space.get("daily_rate", 0) * booking_days
 
-                # DATE LOCKING CONFLICT CHECK (Includes Paid Customer Bookings + Facility Owner Scheduled Events)
                 existing_bookings = db.get("bookings", [])
                 existing_events = db.get("events", [])
                 date_str = str(booking_date)
@@ -195,13 +215,12 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                 )
 
                 if is_customer_locked or is_facility_event_locked:
-                    st.error(f"❌ DATE LOCKED: '{sel_sp_name}' is ALREADY RESERVED/SCHEDULED on {date_str}. Double booking prevented. Please select another date or space.")
+                    st.error(f"❌ DATE LOCKED: '{sel_sp_name}' is ALREADY RESERVED on {date_str}. Please choose another date or space.")
                 else:
                     st.success(f"✅ DATE AVAILABLE: '{sel_sp_name}' is open for booking on {date_str}.")
 
                     st.divider()
                     st.markdown("### 3. Add Service Provider Packages (Supporters)")
-                    st.caption("Select items from accredited vendor templates to compile an instant itemized invoice.")
 
                     selected_addons = []
                     addons_total = 0.0
@@ -211,8 +230,10 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                         for sup in supporters:
                             templates = sup.get("quotation_templates", [])
                             sup_color = sup.get("brand_color", "#1E293B")
+                            sup_logo = sup.get("logo_url", DEFAULT_LOGO)
                             if templates:
                                 with st.expander(f"Add Services: {sup.get('business_name')} ({sup.get('category')})"):
+                                    st.image(sup_logo, width=120)
                                     for t in templates:
                                         item_key = f"{sup.get('supporter_id')}_{t.get('item_name')}"
                                         qty = st.number_input(
@@ -233,22 +254,27 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                     else:
                         st.info("No supplier add-ons currently available.")
 
-                    # --- LIVE DYNAMIC BRANDED INVOICE ---
                     st.divider()
                     grand_total = space_total + addons_total
 
+                    # --- BRANDED OFFICIAL INVOICE WITH LOGO & COMPANY DETAILS ---
                     st.markdown("### 4. Itemized Quotation & Digital Receipt")
                     
                     st.markdown(f"""
                     <div class="invoice-box" style="border-top: 6px solid {v_brand_color};">
-                        <div style="display: flex; justify-content: space-between;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div>
+                                <img src="{v_logo}" class="logo-img" style="margin-bottom: 10px;">
                                 <h2 style="color: {v_brand_color} !important; margin: 0;">OFFICIAL INVOICE / QUOTATION</h2>
-                                <p style="font-size: 0.85rem; color: #64748B;">Issued by {sel_venue.get('name')} | Tax ID: {sel_venue.get('tax_id')}</p>
+                                <p style="font-size: 0.85rem; color: #64748B; margin-top: 4px;">
+                                    <b>Issuer:</b> {sel_venue.get('name')}<br>
+                                    <b>Address:</b> {sel_venue.get('address')}<br>
+                                    <b>Tax / Reg ID:</b> {sel_venue.get('tax_id')} | <b>Email:</b> {sel_venue.get('email')}
+                                </p>
                             </div>
                             <div style="text-align: right;">
-                                <p style="font-size: 0.85rem; margin: 0;"><b>Date:</b> {datetime.date.today()}</p>
-                                <p style="font-size: 0.85rem; margin: 0;"><b>Status:</b> Pending Payment</p>
+                                <p style="font-size: 0.85rem; margin: 0;"><b>Invoice Date:</b> {datetime.date.today()}</p>
+                                <p style="font-size: 0.85rem; margin: 0;"><b>Payment Status:</b> Pending Settlement</p>
                             </div>
                         </div>
                         <hr>
@@ -314,9 +340,7 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                             else:
                                 st.error("Please complete mandatory customer details.")
 
-    # -----------------------------------------------------
-    # TAB B: EVENT TICKETING SHOP WITH VERIFIABLE TICKETS
-    # -----------------------------------------------------
+    # --- TAB B: BRANDED TICKET SHOP & TICKETS WITH LOGOS ---
     with public_tab2:
         st.markdown("### Public Event Ticket Shop")
         events = db.get("events", [])
@@ -324,10 +348,16 @@ if user_role == "Public Portal (Bookings & Ticketing)":
             st.info("No upcoming public ticketed events hosted at this time.")
         else:
             for ev in events:
+                # Find matching venue for branding
+                matching_venue = next((v for v in db.get("venues", []) if v.get("venue_id") == ev.get("venue_id")), {})
+                v_logo = matching_venue.get("logo_url", DEFAULT_LOGO)
+                v_primary = matching_venue.get("brand_color", "#0F172A")
+                v_sec = matching_venue.get("brand_secondary", "#2563EB")
+
                 with st.container():
                     col_e1, col_e2 = st.columns([1, 2])
                     with col_e1:
-                        st.image(ev.get("flyer_url", "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800"), use_container_width=True)
+                        st.image(ev.get("flyer_url", SPACE_PRESETS[0]), use_container_width=True)
                     with col_e2:
                         st.markdown(f"### {ev.get('title')}")
                         st.write(f"<b>Venue:</b> {ev.get('venue_name')} | <b>Space:</b> {ev.get('space_name', 'Full Venue')} | <b>Date:</b> {ev.get('date')}", unsafe_allow_html=True)
@@ -353,6 +383,9 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                                         "event_id": ev.get('event_id'),
                                         "event_title": ev.get('title'),
                                         "venue_name": ev.get('venue_name'),
+                                        "venue_logo": v_logo,
+                                        "brand_color": v_primary,
+                                        "brand_secondary": v_sec,
                                         "buyer": t_buyer,
                                         "email": t_email,
                                         "qty": t_qty,
@@ -365,15 +398,17 @@ if user_role == "Public Portal (Bookings & Ticketing)":
 
                                     st.success("Ticket Purchased Successfully!")
                                     st.markdown(f"""
-                                    <div class="ticket-card">
-                                        <div style="display: flex; justify-content: space-between;">
-                                            <span class="badge-verified">OFFICIAL TICKET</span>
-                                            <span style="font-family: monospace; font-weight: bold;">{new_ticket['verification_hash']}</span>
+                                    <div class="ticket-card" style="border-left: 8px solid {v_primary};">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <span class="badge-verified">OFFICIAL PASS</span>
+                                                <span style="font-family: monospace; font-weight: bold; margin-left: 10px;">{new_ticket['verification_hash']}</span>
+                                            </div>
+                                            <img src="{v_logo}" class="logo-img">
                                         </div>
-                                        <h3 style="margin-top: 10px;">{ev.get('title')}</h3>
+                                        <h3 style="margin-top: 10px; color: {v_primary} !important;">{ev.get('title')}</h3>
                                         <p><b>Holder:</b> {t_buyer} | <b>Qty:</b> {t_qty} Guest(s)<br>
                                         <b>Venue:</b> {ev.get('venue_name')} | <b>Ticket ID:</b> {ticket_id}</p>
-                                        <p style="font-size: 0.8rem; color: #64748B;">Show this verification hash or digital pass at door gate access for scanning.</p>
                                     </div>
                                     """, unsafe_allow_html=True)
                                 else:
@@ -381,11 +416,11 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                     st.divider()
 
 # ---------------------------------------------------------
-# 5. MODULE 2: FACILITY OWNER CONSOLE (FLYER BUILDER, EDIT/DELETE & LOCKING)
+# 5. MODULE 2: FACILITY OWNER CONSOLE
 # ---------------------------------------------------------
 elif user_role == "Facility Owner Console":
     st.title("Facility Owner Console")
-    st.caption("Manage facility sub-spaces, configure corporate branding, publish marketing flyers with custom images, and edit/delete mistaken submissions.")
+    st.caption("Configure facility details, upload logos, manage sub-spaces with thumbnails, and publish flyers.")
     st.divider()
 
     venues = db.get("venues", [])
@@ -405,15 +440,18 @@ elif user_role == "Facility Owner Console":
                 f_tax = st.text_input("Tax / CIPA Registration ID*")
                 f_bank = st.text_input("Bank Payout Account Details")
 
-            st.markdown("##### Corporate Brand Color Scheme")
+            st.markdown("##### Logo & Corporate Branding")
+            f_logo_file = st.file_uploader("Upload Official Company Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+            
             bc1, bc2 = st.columns(2)
             f_brand_color = bc1.color_picker("Primary Brand Color", "#0F172A")
             f_brand_sec = bc2.color_picker("Accent / Secondary Color", "#2563EB")
 
-            f_img = st.text_input("Cover Image URL", value="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800")
+            f_img = st.text_input("Cover Image URL", value=SPACE_PRESETS[0])
             
             if st.form_submit_button("Register Facility Profile"):
                 if f_name and f_email and f_phone and f_address and f_tax:
+                    logo_url = process_image_upload(f_logo_file, DEFAULT_LOGO)
                     db.setdefault("venues", []).append({
                         "venue_id": f"v_{len(venues)+101}",
                         "name": f_name,
@@ -426,6 +464,7 @@ elif user_role == "Facility Owner Console":
                         "bank_details": f_bank,
                         "brand_color": f_brand_color,
                         "brand_secondary": f_brand_sec,
+                        "logo_url": logo_url,
                         "flyer_image_url": f_img,
                         "spaces": []
                     })
@@ -436,36 +475,53 @@ elif user_role == "Facility Owner Console":
         cur_v = venues[0]
         v_color = cur_v.get("brand_color", "#0F172A")
         v_sec = cur_v.get("brand_secondary", "#2563EB")
+        v_logo = cur_v.get("logo_url", DEFAULT_LOGO)
 
         st.markdown(f"""
             <div class="profile-card" style="background: linear-gradient(135deg, {v_color} 0%, {v_sec} 100%);">
-                <h2 style="color: #FFFFFF !important; margin: 0;">🏛️ {cur_v.get('name')}</h2>
-                <p style="color: #F1F5F9 !important; margin-top: 5px;">
-                    📍 {cur_v.get('address')} | 👥 Max Capacity: {cur_v.get('max_capacity'):,} | Tax ID: {cur_v.get('tax_id')}
-                </p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 style="color: #FFFFFF !important; margin: 0;">🏛️ {cur_v.get('name')}</h2>
+                        <p style="color: #F1F5F9 !important; margin-top: 5px;">
+                            📍 {cur_v.get('address')} | 👥 Max Capacity: {cur_v.get('max_capacity'):,} | Tax ID: {cur_v.get('tax_id')}
+                        </p>
+                    </div>
+                    <img src="{v_logo}" class="logo-img" style="background: white; padding: 4px; border-radius: 6px;">
+                </div>
             </div>
         """, unsafe_allow_html=True)
 
         t_spaces, t_brand, t_flyers, t_bookings = st.tabs([
-            "Configured Sub-Spaces (Edit/Delete)", 
-            "Brand Color Settings",
-            "Flyer Builder & Scheduled Events (Lock Dates)", 
+            "Configured Sub-Spaces (Photos & Thumbnails)", 
+            "Logo & Corporate Brand Colors",
+            "Flyer Builder & Scheduled Events", 
             "Locked Date Bookings & Invoices"
         ])
 
-        # SUB-SPACES WITH EDIT AND DELETE
+        # SUB-SPACES WITH PHOTO PRESETS & UPLOADS
         with t_spaces:
-            st.markdown("#### Add / Edit / Delete Sub-Spaces")
+            st.markdown("#### Add / Manage Sub-Spaces with Photos")
             with st.form("add_sp"):
                 c1, c2, c3 = st.columns(3)
                 s_name = c1.text_input("Space Name (e.g. Executive Ballroom)")
                 s_cap = c2.number_input("Capacity", value=250)
                 s_rate = c3.number_input("Daily Hire Rate (BWP)", value=3500.0)
+
+                st.markdown("##### Sub-Space Photo:")
+                sp_img_file = st.file_uploader("Upload Sub-Space Photo", type=["png", "jpg", "jpeg"], key="sp_upload")
+                preset_choice = st.selectbox("Or Choose Preset Photo Thumbnail", SPACE_PRESETS)
+
                 if st.form_submit_button("Add Hire Space"):
                     if s_name:
-                        cur_v.setdefault("spaces", []).append({"name": s_name, "capacity": s_cap, "daily_rate": s_rate})
+                        final_sp_img = process_image_upload(sp_img_file, preset_choice)
+                        cur_v.setdefault("spaces", []).append({
+                            "name": s_name, 
+                            "capacity": s_cap, 
+                            "daily_rate": s_rate,
+                            "image_url": final_sp_img
+                        })
                         save_data(db)
-                        st.success("Space added!")
+                        st.success("Sub-space added!")
                         st.rerun()
 
             st.divider()
@@ -475,32 +531,38 @@ elif user_role == "Facility Owner Console":
                 st.info("No sub-spaces configured.")
             else:
                 for idx, sp in enumerate(spaces_list):
-                    with st.expander(f"📍 {sp.get('name')} — BWP {sp.get('daily_rate'):,.2f}/day (Cap: {sp.get('capacity')})"):
-                        with st.form(f"edit_sp_form_{idx}"):
-                            ec1, ec2, ec3 = st.columns(3)
-                            es_name = ec1.text_input("Space Name", value=sp.get('name'))
-                            es_cap = ec2.number_input("Capacity", value=int(sp.get('capacity', 0)))
-                            es_rate = ec3.number_input("Daily Rate (BWP)", value=float(sp.get('daily_rate', 0.0)))
-                            
-                            col_btn1, col_btn2 = st.columns(2)
-                            save_edit = col_btn1.form_submit_button("💾 Save Changes")
-                            delete_sp = col_btn2.form_submit_button("🗑️ Delete Space")
+                    with st.expander(f"📍 {sp.get('name')} — BWP {sp.get('daily_rate'):,.2f}/day"):
+                        sc1, sc2 = st.columns([1, 2])
+                        with sc1:
+                            st.image(sp.get("image_url", SPACE_PRESETS[0]), use_container_width=True)
+                        with sc2:
+                            with st.form(f"edit_sp_form_{idx}"):
+                                es_name = st.text_input("Space Name", value=sp.get('name'))
+                                es_cap = st.number_input("Capacity", value=int(sp.get('capacity', 0)))
+                                es_rate = st.number_input("Daily Rate (BWP)", value=float(sp.get('daily_rate', 0.0)))
+                                new_sp_file = st.file_uploader("Change Image", type=["png", "jpg", "jpeg"], key=f"sp_edit_{idx}")
+                                
+                                col_btn1, col_btn2 = st.columns(2)
+                                save_edit = col_btn1.form_submit_button("💾 Save Changes")
+                                delete_sp = col_btn2.form_submit_button("🗑️ Delete Space")
 
-                            if save_edit:
-                                spaces_list[idx] = {"name": es_name, "capacity": es_cap, "daily_rate": es_rate}
-                                save_data(db)
-                                st.success("Sub-space updated!")
-                                st.rerun()
-                            if delete_sp:
-                                spaces_list.pop(idx)
-                                save_data(db)
-                                st.warning("Sub-space deleted!")
-                                st.rerun()
+                                if save_edit:
+                                    img_final = process_image_upload(new_sp_file, sp.get("image_url"))
+                                    spaces_list[idx] = {"name": es_name, "capacity": es_cap, "daily_rate": es_rate, "image_url": img_final}
+                                    save_data(db)
+                                    st.success("Sub-space updated!")
+                                    st.rerun()
+                                if delete_sp:
+                                    spaces_list.pop(idx)
+                                    save_data(db)
+                                    st.warning("Sub-space deleted!")
+                                    st.rerun()
 
+        # LOGO & BRANDING UPDATE
         with t_brand:
-            st.markdown("#### Update Corporate Brand Colors")
-            st.caption("These colors format your quotation invoices, digital receipts, and header cards.")
+            st.markdown("#### Upload Company Logo & Set Corporate Colors")
             with st.form("update_brand_form"):
+                new_logo_file = st.file_uploader("Upload New Company Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
                 col_b1, col_b2 = st.columns(2)
                 new_p = col_b1.color_picker("Primary Corporate Color", value=cur_v.get("brand_color", "#0F172A"))
                 new_s = col_b2.color_picker("Secondary / Accent Color", value=cur_v.get("brand_secondary", "#2563EB"))
@@ -508,56 +570,31 @@ elif user_role == "Facility Owner Console":
                 if st.form_submit_button("Save Corporate Branding"):
                     cur_v["brand_color"] = new_p
                     cur_v["brand_secondary"] = new_s
+                    if new_logo_file is not None:
+                        cur_v["logo_url"] = process_image_upload(new_logo_file, cur_v.get("logo_url"))
                     save_data(db)
-                    st.success("Brand colors updated!")
+                    st.success("Brand logo and colors updated across all invoices, flyers & tickets!")
                     st.rerun()
 
-        # FLYER BUILDER WITH CUSTOM IMAGE UPLOAD & DATE LOCKING
+        # FLYER BUILDER WITH LOGOS
         with t_flyers:
-            st.markdown("#### 🎨 Custom Flyer Builder & Event Scheduler (Auto-Locks Venue Date)")
-            st.caption("Design flyers with your own custom images or preset templates. Scheduling an event automatically locks the venue space on that date to prevent double bookings.")
+            st.markdown("#### 🎨 Custom Flyer Builder (Includes Brand Logo)")
             
             with st.form("flyer_builder_form"):
                 e_title = st.text_input("Event Title*", placeholder="Annual Executive Business Expo")
-                
-                # Space selection for event lock
                 v_spaces_names = ["All Spaces / Full Venue"] + [s.get("name") for s in cur_v.get("spaces", [])]
-                e_space = st.selectbox("Reserve/Lock Venue Space for Event*", v_spaces_names)
-                
+                e_space = st.selectbox("Reserve/Lock Venue Space*", v_spaces_names)
                 e_date = st.date_input("Scheduled Event Date*")
                 e_price = st.number_input("Ticket Admission Price (BWP)", value=250.0)
-                e_desc = st.text_area("Event Description / Highlights")
+                e_desc = st.text_area("Event Description")
 
-                st.markdown("##### Poster / Flyer Image Source:")
-                img_source = st.radio("Image Source Selection", ["Upload My Own Custom Image File", "Use Custom Image URL", "Choose Preset Graphic Template"])
+                st.markdown("##### Poster Image Selection:")
+                uploaded_flyer_file = st.file_uploader("Upload Poster Image (PNG/JPG)", type=["png", "jpg", "jpeg"])
+                preset_flyer = st.selectbox("Or Choose Stock Poster Image", SPACE_PRESETS)
 
-                uploaded_flyer_file = None
-                custom_img_url = ""
-                flyer_template = "Corporate Gala Poster"
-
-                if img_source == "Upload My Own Custom Image File":
-                    uploaded_flyer_file = st.file_uploader("Upload Poster Image (PNG/JPG)", type=["png", "jpg", "jpeg"])
-                elif img_source == "Use Custom Image URL":
-                    custom_img_url = st.text_input("Image Web Link (URL)", placeholder="https://example.com/my-poster.jpg")
-                else:
-                    flyer_template = st.radio("Preset Templates", ["Corporate Gala Poster", "Festival & Concert Poster", "Conference & Expo Poster"])
-
-                img_map = {
-                    "Corporate Gala Poster": "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=800",
-                    "Festival & Concert Poster": "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800",
-                    "Conference & Expo Poster": "https://images.unsplash.com/photo-1511578314322-379afb476865?w=800"
-                }
-
-                if st.form_submit_button("Publish Event, Lock Date & Generate Flyer"):
+                if st.form_submit_button("Publish Event & Generate Flyer"):
                     if e_title:
-                        # Determine Final Poster URL
-                        if img_source == "Upload My Own Custom Image File" and uploaded_flyer_file is not None:
-                            final_flyer_url = process_image_upload(uploaded_flyer_file, img_map["Corporate Gala Poster"])
-                        elif img_source == "Use Custom Image URL" and custom_img_url.strip():
-                            final_flyer_url = custom_img_url.strip()
-                        else:
-                            final_flyer_url = img_map.get(flyer_template, img_map["Corporate Gala Poster"])
-
+                        final_flyer = process_image_upload(uploaded_flyer_file, preset_flyer)
                         ev_id = f"EV-{len(db.get('events', []))+101}"
                         db.setdefault("events", []).append({
                             "event_id": ev_id,
@@ -568,53 +605,26 @@ elif user_role == "Facility Owner Console":
                             "date": str(e_date),
                             "price": e_price,
                             "description": e_desc,
-                            "flyer_url": final_flyer_url
+                            "flyer_url": final_flyer
                         })
                         save_data(db)
-                        st.success(f"🎉 Event '{e_title}' published! Date {e_date} is now LOCKED for '{e_space}'.")
+                        st.success(f"Event '{e_title}' published!")
                         st.rerun()
 
             st.divider()
-            st.markdown("##### Published Events & Editable Flyers")
             pub_events = [e for e in db.get("events", []) if e.get("venue_id") == cur_v.get("venue_id")]
-            if not pub_events:
-                st.info("No published events yet.")
-            else:
+            if pub_events:
                 for idx, ev in enumerate(pub_events):
-                    with st.expander(f"📢 {ev.get('title')} ({ev.get('date')}) — Space: {ev.get('space_name', 'Full Venue')}"):
+                    with st.expander(f"📢 {ev.get('title')} ({ev.get('date')})"):
                         fc1, fc2 = st.columns([1, 2])
                         with fc1:
                             st.image(ev.get("flyer_url"), use_container_width=True)
                         with fc2:
-                            with st.form(f"edit_event_form_{idx}"):
-                                ee_title = st.text_input("Title", value=ev.get("title"))
-                                ee_date = st.date_input("Date", value=datetime.datetime.strptime(ev.get("date"), "%Y-%m-%d").date())
-                                ee_price = st.number_input("Ticket Price (BWP)", value=float(ev.get("price", 0)))
-                                ee_desc = st.text_area("Description", value=ev.get("description"))
-                                
-                                e_btn1, e_btn2 = st.columns(2)
-                                save_ev = e_btn1.form_submit_button("💾 Save Changes")
-                                del_ev = e_btn2.form_submit_button("🗑️ Delete Event")
-
-                                if save_ev:
-                                    ev["title"] = ee_title
-                                    ev["date"] = str(ee_date)
-                                    ev["price"] = ee_price
-                                    ev["description"] = ee_desc
-                                    save_data(db)
-                                    st.success("Event updated!")
-                                    st.rerun()
-                                if del_ev:
-                                    db["events"].remove(ev)
-                                    save_data(db)
-                                    st.warning("Event deleted! Date is unlocked.")
-                                    st.rerun()
-
-                            # Social Media Share Link
-                            base_url = "https://your-platform-domain.streamlit.app"
-                            share_link_venue = f"{base_url}/?venue_id={cur_v.get('venue_id')}"
-                            st.markdown("**Social Media Share Link:**")
-                            st.code(share_link_venue, language="text")
+                            st.write(f"<b>Venue:</b> {ev.get('venue_name')} | <b>Price:</b> BWP {ev.get('price'):,.2f}", unsafe_allow_html=True)
+                            if st.button("Delete Event", key=f"del_ev_{idx}"):
+                                db["events"].remove(ev)
+                                save_data(db)
+                                st.rerun()
 
         with t_bookings:
             st.markdown("#### Confirmed Date Bookings & Payment Records")
@@ -625,21 +635,19 @@ elif user_role == "Facility Owner Console":
                 for b in bks:
                     with st.expander(f"Booking #{b.get('booking_id')} — {b.get('customer_name')} ({b.get('booking_date')})"):
                         st.write(f"**Space:** {b.get('space_name')} | **Status:** {b.get('status')}")
-                        st.write(f"**Customer Contact:** {b.get('customer_email')} | {b.get('customer_phone')}")
-                        st.write(f"**Venue Rate:** BWP {b.get('venue_cost'):,.2f} | **Vendor Services:** BWP {b.get('addons_cost'):,.2f}")
                         st.write(f"**Grand Total Paid:** **BWP {b.get('grand_total'):,.2f}**")
 
 # ---------------------------------------------------------
-# 6. MODULE 3: FACILITY SUPPORTER CONSOLE (VENDORS - EDIT/DELETE TEMPLATES)
+# 6. MODULE 3: FACILITY SUPPORTER CONSOLE (VENDORS)
 # ---------------------------------------------------------
 elif user_role == "Facility Supporter Console (Vendors)":
     st.title("Facility Supporter Console")
-    st.caption("Configure accredited service templates (catering, cutlery, decor, AV, security) and manage item pricing.")
+    st.caption("Manage vendor profile, upload corporate logos, and configure item pricing.")
     st.divider()
 
     supporters = db.get("supporters", [])
 
-    st.markdown("### 1. Vendor Profile & Corporate Branding")
+    st.markdown("### 1. Vendor Profile, Logo & Branding")
     with st.form("supporter_reg_form"):
         col1, col2 = st.columns(2)
         s_name = col1.text_input("Business Trading Name*", placeholder="Kalahari Decor & Catering")
@@ -653,11 +661,13 @@ elif user_role == "Facility Supporter Console (Vendors)":
         s_person = col1.text_input("Contact Person*")
         s_email = col2.text_input("Contact Email*")
         s_phone = col2.text_input("Phone / WhatsApp*")
-        s_area = col2.text_input("Coverage Region*", placeholder="Gaborone & Greater Region")
         s_color = col2.color_picker("Corporate Brand Color", "#1E293B")
+
+        s_logo_file = st.file_uploader("Upload Vendor Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
 
         if st.form_submit_button("Save Supporter Profile"):
             if s_name and s_email and s_phone:
+                logo_url = process_image_upload(s_logo_file, DEFAULT_LOGO)
                 existing = next((s for s in supporters if s.get("business_name") == s_name), None)
                 if not existing:
                     new_sup = {
@@ -667,33 +677,32 @@ elif user_role == "Facility Supporter Console (Vendors)":
                         "contact_person": s_person,
                         "email": s_email,
                         "phone": s_phone,
-                        "service_area": s_area,
                         "brand_color": s_color,
+                        "logo_url": logo_url,
                         "quotation_templates": []
                     }
                     db.setdefault("supporters", []).append(new_sup)
                 else:
                     existing["brand_color"] = s_color
+                    if s_logo_file is not None:
+                        existing["logo_url"] = logo_url
                 save_data(db)
-                st.success("Profile Updated Successfully!")
+                st.success("Supporter Profile & Logo Saved!")
                 st.rerun()
 
     if supporters:
         st.divider()
-        st.markdown("### 2. Configure & Manage Industry Quotation Item Templates")
-        st.caption("Add, edit, or delete item templates (e.g., cutlery per head, stage decor, floral arrangements).")
-
+        st.markdown("### 2. Configure Quotation Item Templates")
         sel_sup_name = st.selectbox("Select Active Supporter Account:", [s.get("business_name") for s in supporters])
         cur_sup = next(s for s in supporters if s.get("business_name") == sel_sup_name)
 
         with st.form("add_template_item_form"):
-            st.markdown(f"#### Add New Item Template to `{cur_sup.get('business_name')}`")
             t_col1, t_col2, t_col3 = st.columns(3)
-            i_name = t_col1.text_input("Template Item Name", placeholder="e.g. Premium VIP Cutlery & Crockery Set")
+            i_name = t_col1.text_input("Template Item Name")
             i_type = t_col2.selectbox("Unit Metric Type", ["Per Head / Guest", "Per Day", "Per Item / Set", "Flat Rate Shift"])
             i_price = t_col3.number_input("Unit Rate Price (BWP)", min_value=1.0, value=45.0)
 
-            if st.form_submit_button("Add Template Item"):
+            if st.form_submit_button("Add Item Template"):
                 if i_name:
                     cur_sup.setdefault("quotation_templates", []).append({
                         "item_name": i_name,
@@ -701,50 +710,24 @@ elif user_role == "Facility Supporter Console (Vendors)":
                         "unit_price": i_price
                     })
                     save_data(db)
-                    st.success(f"Added '{i_name}' to quotation template library!")
+                    st.success(f"Added '{i_name}'!")
                     st.rerun()
 
         st.divider()
-        st.markdown("##### Existing Quotation Item Templates (Edit / Delete)")
         items = cur_sup.get("quotation_templates", [])
-        if not items:
-            st.info("No quotation item templates added yet.")
-        else:
-            for idx, it in enumerate(items):
-                with st.expander(f"🛠️ {it.get('item_name')} — BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})"):
-                    with st.form(f"edit_supporter_item_{idx}"):
-                        ei_col1, ei_col2, ei_col3 = st.columns(3)
-                        ei_name = ei_col1.text_input("Item Name", value=it.get('item_name'))
-                        ei_type = ei_col2.selectbox("Unit Type", ["Per Head / Guest", "Per Day", "Per Item / Set", "Flat Rate Shift"], index=0)
-                        ei_price = ei_col3.number_input("Unit Price (BWP)", value=float(it.get('unit_price', 0.0)))
-
-                        sb_col1, sb_col2 = st.columns(2)
-                        save_sup_item = sb_col1.form_submit_button("💾 Save Item")
-                        del_sup_item = sb_col2.form_submit_button("🗑️ Delete Item")
-
-                        if save_sup_item:
-                            items[idx] = {"item_name": ei_name, "unit_type": ei_type, "unit_price": ei_price}
-                            save_data(db)
-                            st.success("Item template updated!")
-                            st.rerun()
-                        if del_sup_item:
-                            items.pop(idx)
-                            save_data(db)
-                            st.warning("Item template deleted!")
-                            st.rerun()
+        for idx, it in enumerate(items):
+            st.write(f"• **{it.get('item_name')}** — BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})")
 
 # ---------------------------------------------------------
-# 7. MODULE 4: TICKET SCANNER & GATE ACCESS VERIFICATION
+# 7. MODULE 4: TICKET SCANNER & GATE ACCESS
 # ---------------------------------------------------------
 elif user_role == "Ticket Scanner & Gate Access":
     st.title("Door Gate Ticket Access & Verification Console")
-    st.caption("Scan or enter ticket hashes at event entrances to verify validity and prevent double entry.")
+    st.caption("Scan or enter ticket hashes at event entrances to verify validity.")
     st.divider()
 
     tickets = db.get("tickets", [])
-
-    st.markdown("### Verify Admission Pass")
-    verify_input = st.text_input("Enter Ticket Verification Hash or ID (e.g. HASH-XXXXXX or TKT-10001):", placeholder="HASH-A1B2C3D4E5F6")
+    verify_input = st.text_input("Enter Ticket Verification Hash or ID (e.g. HASH-XXXXXX or TKT-10001):")
 
     if st.button("Scan & Verify Ticket", type="primary"):
         if verify_input:
@@ -757,9 +740,15 @@ elif user_role == "Ticket Scanner & Gate Access":
                     matched_tkt["scanned_at"] = str(datetime.datetime.now())
                     save_data(db)
 
+                    v_logo = matched_tkt.get("venue_logo", DEFAULT_LOGO)
+                    v_color = matched_tkt.get("brand_color", "#059669")
+
                     st.markdown(f"""
                     <div style="background-color: #D1FAE5; border: 2px solid #059669; padding: 1.5rem; border-radius: 8px;">
-                        <h2 style="color: #065F46 !important; margin: 0;">✅ ACCESS GRANTED — VALID TICKET</h2>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h2 style="color: #065F46 !important; margin: 0;">✅ ACCESS GRANTED — VALID TICKET</h2>
+                            <img src="{v_logo}" class="logo-img">
+                        </div>
                         <hr style="border-color: #A7F3D0;">
                         <p style="color: #064E3B !important;">
                             <b>Event:</b> {matched_tkt.get('event_title')}<br>
@@ -770,44 +759,19 @@ elif user_role == "Ticket Scanner & Gate Access":
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.markdown(f"""
-                    <div style="background-color: #FEE2E2; border: 2px solid #DC2626; padding: 1.5rem; border-radius: 8px;">
-                        <h2 style="color: #991B1B !important; margin: 0;">❌ INVALID / ALREADY REDEEMED</h2>
-                        <hr style="border-color: #FCA5A5;">
-                        <p style="color: #7F1D1D !important;">
-                            <b>Ticket Hash:</b> {matched_tkt.get('verification_hash')}<br>
-                            <b>Previous Scan Timestamp:</b> {matched_tkt.get('scanned_at')}<br>
-                            <b>Status:</b> THIS TICKET HAS ALREADY BEEN USED FOR ENTRY.
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.error("❌ INVALID / ALREADY REDEEMED: Ticket has already been scanned.")
             else:
-                st.error("❌ INVALID TICKET: Verification hash or ID not found in master ledger.")
-        else:
-            st.warning("Please enter a ticket hash or ID to verify.")
+                st.error("❌ INVALID TICKET: Verification hash not found.")
 
 # ---------------------------------------------------------
-# 8. MODULE 5: PLATFORM ADMIN MASTER LEDGER
+# 8. MODULE 5: PLATFORM ADMIN
 # ---------------------------------------------------------
 elif user_role == "Platform Admin / Master Ledger":
     st.title("Master Executive Control Panel")
     st.divider()
-
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Registered Facilities", len(db.get("venues", [])))
-    m2.metric("Registered Vendors", len(db.get("supporters", [])))
-    m3.metric("Confirmed Bookings", len(db.get("bookings", [])))
-    m4.metric("Issued Tickets", len(db.get("tickets", [])))
-
-    st.markdown("---")
-    st.markdown("### System-Wide Master Auditing Ledgers")
-    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["Venue Bookings Ledger", "Verifiable Tickets Ledger", "Raw Database JSON"])
-
-    with admin_tab1:
-        st.json(db.get("bookings", []))
-
-    with admin_tab2:
-        st.json(db.get("tickets", []))
-
-    with admin_tab3:
-        st.json(db)
+    m1.metric("Facilities", len(db.get("venues", [])))
+    m2.metric("Vendors", len(db.get("supporters", [])))
+    m3.metric("Bookings", len(db.get("bookings", [])))
+    m4.metric("Tickets", len(db.get("tickets", [])))
+    st.json(db)
