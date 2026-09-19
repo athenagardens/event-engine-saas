@@ -2,7 +2,6 @@ import streamlit as st
 import json
 import os
 import urllib.parse
-import pandas as pd
 from datetime import datetime, date
 from fpdf import FPDF
 
@@ -41,7 +40,54 @@ def inject_custom_css():
     """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. JSON DATABASE INITIALIZATION & OPERATIONS
+# 2. DEFAULT TEMPLATES FOR SUPPLIERS
+# ---------------------------------------------------------
+DEFAULT_FLORIST_CATALOGUE = [
+    # Stage Arrangements
+    {"item_id": "fl_stg_hi", "category": "Stage Floral Arch", "name": "High-End Grand Orchid & Rose Stage Arch", "price": 8500.0, "unit": "per setup", "tier": "High End (Premium Orchids/Roses)", "image_url": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=600"},
+    {"item_id": "fl_stg_mid", "category": "Stage Floral Arch", "name": "Mid-Range Mixed Seasonal Floral Arch", "price": 4500.0, "unit": "per setup", "tier": "Mid Range (Seasonal Blooms)", "image_url": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=600"},
+    {"item_id": "fl_stg_low", "category": "Stage Floral Arch", "name": "Budget Greenery & Carnation Arch", "price": 2200.0, "unit": "per setup", "tier": "Low End / Budget (Greenery Base)", "image_url": "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=600"},
+    
+    # Bouquets
+    {"item_id": "fl_bq_hi", "category": "Bridal / Host Bouquet", "name": "Premium Luxury Cascading Lily Bouquet", "price": 1200.0, "unit": "per bouquet", "tier": "High End", "image_url": "https://images.unsplash.com/photo-1561181286-d3fee7d55364?w=600"},
+    {"item_id": "fl_bq_mid", "category": "Bridal / Host Bouquet", "name": "Classic Hand-Tied Rose Bouquet", "price": 650.0, "unit": "per bouquet", "tier": "Mid Range", "image_url": "https://images.unsplash.com/photo-1533616688419-b7a585564566?w=600"},
+    {"item_id": "fl_bq_low", "category": "Bridal / Host Bouquet", "name": "Simple Petite Posy Bouquet", "price": 300.0, "unit": "per bouquet", "tier": "Low End", "image_url": "https://images.unsplash.com/photo-1508615070457-7baeba4003ab?w=600"},
+
+    # Boutonnieres / Pocket Flowers
+    {"item_id": "fl_pkt_hi", "category": "Pocket Flowers / Boutonniere", "name": "Orchid & Gold Leaf Boutonniere", "price": 150.0, "unit": "per piece", "tier": "High End", "image_url": "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600"},
+    {"item_id": "fl_pkt_mid", "category": "Pocket Flowers / Boutonniere", "name": "Classic Single Rose Boutonniere", "price": 85.0, "unit": "per piece", "tier": "Mid Range", "image_url": "https://images.unsplash.com/photo-1508615070457-7baeba4003ab?w=600"},
+    {"item_id": "fl_pkt_low", "category": "Pocket Flowers / Boutonniere", "name": "Minimalist Carnation Pin", "price": 45.0, "unit": "per piece", "tier": "Low End", "image_url": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=600"},
+
+    # Table Centerpieces (Large, Medium, Small)
+    {"item_id": "fl_cp_lg", "category": "Centerpiece - Large", "name": "Tall Crystal Vase Arrangement (High End)", "price": 850.0, "unit": "per table", "tier": "High End", "image_url": "https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=600"},
+    {"item_id": "fl_cp_md", "category": "Centerpiece - Medium", "name": "Medium Gold Bowl Floral Cluster (Mid)", "price": 450.0, "unit": "per table", "tier": "Mid Range", "image_url": "https://images.unsplash.com/photo-1526047932273-341f2a7631f9?w=600"},
+    {"item_id": "fl_cp_sm", "category": "Centerpiece - Small", "name": "Small Bud Vase Trio (Budget)", "price": 180.0, "unit": "per table", "tier": "Low End", "image_url": "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=600"}
+]
+
+DEFAULT_CATERING_CATALOGUE = [
+    # Tables
+    {"item_id": "cat_tb_hi", "category": "Tables", "name": "High-End Mirror Top Executive Banquet Table", "price": 350.0, "unit": "per table", "tier": "High End", "image_url": "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=600"},
+    {"item_id": "cat_tb_mid", "category": "Tables", "name": "Standard Round 10-Seater Banquet Table", "price": 120.0, "unit": "per table", "tier": "Mid Range", "image_url": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=600"},
+    {"item_id": "cat_tb_low", "category": "Tables", "name": "Trestle Folding Table", "price": 60.0, "unit": "per table", "tier": "Low End", "image_url": "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=600"},
+
+    # Chairs
+    {"item_id": "cat_ch_hi", "category": "Chairs", "name": "Gold Chiavari / Ghost Acrylic Chair", "price": 45.0, "unit": "per chair", "tier": "High End", "image_url": "https://images.unsplash.com/photo-1503602642458-232111445657?w=600"},
+    {"item_id": "cat_ch_mid", "category": "Chairs", "name": "Cushioned Banquet Chair", "price": 25.0, "unit": "per chair", "tier": "Mid Range", "image_url": "https://images.unsplash.com/photo-1580481072645-022f9a6d83d0?w=600"},
+    {"item_id": "cat_ch_low", "category": "Chairs", "name": "Standard Plastic Armless Chair", "price": 10.0, "unit": "per chair", "tier": "Low End", "image_url": "https://images.unsplash.com/photo-1503602642458-232111445657?w=600"},
+
+    # Tablecloths
+    {"item_id": "cat_tc_hi", "category": "Table Linen", "name": "Velvet / Embroidered Damask Tablecloth", "price": 180.0, "unit": "per cloth", "tier": "High End", "image_url": "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=600"},
+    {"item_id": "cat_tc_mid", "category": "Table Linen", "name": "Premium Satin Floor-Length Linen", "price": 90.0, "unit": "per cloth", "tier": "Mid Range", "image_url": "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=600"},
+    {"item_id": "cat_tc_low", "category": "Table Linen", "name": "Standard Polyester Table Overlay", "price": 40.0, "unit": "per cloth", "tier": "Low End", "image_url": "https://images.unsplash.com/photo-1465495976277-4387d4b0b4c6?w=600"},
+
+    # Cutlery / Table Settings
+    {"item_id": "cat_ct_hi", "category": "Cutlery & Dinnerware", "name": "Full Gold-Plated 5-Piece Cutlery & Fine Bone China Set", "price": 85.0, "unit": "per seat setting", "tier": "High End", "image_url": "https://images.unsplash.com/photo-1615865417236-d67f572a746f?w=600"},
+    {"item_id": "cat_ct_mid", "category": "Cutlery & Dinnerware", "name": "Polished Stainless Steel & Ceramic Setting", "price": 45.0, "unit": "per seat setting", "tier": "Mid Range", "image_url": "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600"},
+    {"item_id": "cat_ct_low", "category": "Cutlery & Dinnerware", "name": "Standard Stainless Cutlery & Melamine Plate Set", "price": 20.0, "unit": "per seat setting", "tier": "Low End", "image_url": "https://images.unsplash.com/photo-1615865417236-d67f572a746f?w=600"}
+]
+
+# ---------------------------------------------------------
+# 3. DATABASE INITIALIZATION & OPERATIONS
 # ---------------------------------------------------------
 DB_FILE = "enterprise_event_platform_db.json"
 
@@ -69,6 +115,7 @@ def load_data():
                     "venue_id": "v_royal_aria",
                     "title": "Botswana Annual Innovation Gala 2026",
                     "date": "2026-11-20",
+                    "is_free": False,
                     "ticket_price": 450.0,
                     "tickets_total": 500,
                     "tickets_sold": 42,
@@ -83,11 +130,15 @@ def load_data():
                     "category": "Florists & Decorators",
                     "email": "contact@kalaharidecor.bw",
                     "status": "Active",
-                    "catalogue": [
-                        {"item_id": "itm_fl_01", "name": "Stage Floral Arch & Pedestals", "price": 4500.0, "unit": "per setup"},
-                        {"item_id": "itm_fl_02", "name": "VIP Table Centerpieces", "price": 350.0, "unit": "per table"},
-                        {"item_id": "itm_fl_03", "name": "Ambient LED & Mood Lighting Kit", "price": 2800.0, "unit": "per event"}
-                    ]
+                    "catalogue": DEFAULT_FLORIST_CATALOGUE
+                },
+                {
+                    "supplier_id": "sup_cater",
+                    "name": "Crown Catering & Tableware Rentals",
+                    "category": "Catering & Equipment Rentals",
+                    "email": "info@crowncatering.bw",
+                    "status": "Active",
+                    "catalogue": DEFAULT_CATERING_CATALOGUE
                 }
             ],
             "facility_bookings": [],
@@ -112,7 +163,7 @@ def save_data(data):
 db = load_data()
 
 # ---------------------------------------------------------
-# 3. DIGITAL PDF GENERATOR
+# 4. DIGITAL PDF GENERATOR
 # ---------------------------------------------------------
 def generate_pdf(document_title, fields_dict, footer_note=""):
     pdf = FPDF()
@@ -142,7 +193,7 @@ def generate_pdf(document_title, fields_dict, footer_note=""):
     return bytes(pdf_bytes)
 
 # ---------------------------------------------------------
-# 4. INITIALIZATION & QUERY PARAMETERS
+# 5. INITIALIZATION & ROUTING
 # ---------------------------------------------------------
 st.set_page_config(page_title="Enterprise Venue Marketplace & Ticketing Portal", layout="wide")
 inject_custom_css()
@@ -160,7 +211,9 @@ if param_facility or param_event:
     target_venue = next((v for v in db["venues"] if v["venue_id"] == param_facility), None) if param_facility else None
     target_event = next((e for e in db["events"] if e["event_id"] == param_event), None) if param_event else None
 
-    # Scenario A: Event Flyer Link
+    # -----------------------------------------------------
+    # PUBLIC ROUTE A: EVENT FLYER LINK
+    # -----------------------------------------------------
     if target_event:
         v_host = next((v for v in db["venues"] if v["venue_id"] == target_event["venue_id"]), None)
         is_suspended = (v_host and v_host.get("status") == "Suspended")
@@ -179,31 +232,26 @@ if param_facility or param_event:
             st.write(f"**Event Details:** {target_event['description']}")
 
         with col_f2:
-            remaining = target_event["tickets_total"] - target_event["tickets_sold"]
-            st.metric("Tickets Remaining", remaining)
-            st.metric("Price Per Pass", f"BWP {target_event['ticket_price']:,.2f}")
+            is_free = target_event.get("is_free", False)
 
-            if remaining > 0:
-                with st.form("buy_ticket_flyer_form"):
-                    st.markdown("##### Customer Checkout")
+            if is_free:
+                st.success("🎉 **FREE ENTRY EVENT — NO TICKET PAYMENT REQUIRED**")
+                with st.form("free_event_form"):
+                    st.markdown("##### Claim Free Pass / Register Attendance")
                     buyer_name = st.text_input("Full Name")
                     buyer_email = st.text_input("Email Address")
-                    qty = st.number_input("Quantity", min_value=1, max_value=remaining, value=1)
 
-                    if st.form_submit_button("Confirm & Pay Ticket"):
+                    if st.form_submit_button("Get Free Pass"):
                         if buyer_name and buyer_email:
-                            total_cost = qty * target_event["ticket_price"]
-                            target_event["tickets_sold"] += qty
-
                             tkt_obj = {
-                                "ticket_id": f"tkt_{len(db['ticket_orders'])+1001}",
+                                "ticket_id": f"tkt_free_{len(db['ticket_orders'])+1001}",
                                 "event_id": target_event["event_id"],
                                 "event_title": target_event["title"],
                                 "venue_id": target_event["venue_id"],
                                 "customer_name": buyer_name,
                                 "customer_email": buyer_email,
-                                "quantity": qty,
-                                "total_paid": total_cost,
+                                "quantity": 1,
+                                "total_paid": 0.0,
                                 "purchase_date": str(date.today()),
                                 "locked_due_to_suspension": is_suspended
                             }
@@ -214,26 +262,79 @@ if param_facility or param_event:
                                 st.warning("We've Got Your Request! Your booking details are saved. We are just waiting on the facility owner to finalize their portal account details on their end.")
                             else:
                                 pdf_tkt = generate_pdf(
-                                    document_title="Digital Entry Ticket Pass",
+                                    document_title="Free Event Access Pass",
                                     fields_dict={
-                                        "Ticket ID": tkt_obj["ticket_id"],
+                                        "Pass ID": tkt_obj["ticket_id"],
                                         "Attendee Name": buyer_name,
                                         "Event Title": target_event["title"],
                                         "Facility": v_host['name'] if v_host else 'Venue',
                                         "Date": target_event["date"],
-                                        "Pass Quantity": f"{qty} Pass(es)",
-                                        "Total Paid": f"BWP {total_cost:,.2f}"
+                                        "Entry Type": "Free Open Entry"
                                     },
-                                    footer_note="Present barcode / digital PDF pass at facility gate for entry verification."
+                                    footer_note="Present pass at gate."
                                 )
-                                st.success("Ticket Issued Successfully!")
-                                st.download_button("Download Digital Ticket PDF", pdf_tkt, f"Ticket_{tkt_obj['ticket_id']}.pdf", "application/pdf")
+                                st.success("Free Pass Registered Successfully!")
+                                st.download_button("Download Free Pass PDF", pdf_tkt, f"Pass_{tkt_obj['ticket_id']}.pdf", "application/pdf")
                         else:
                             st.error("Name and Email required.")
             else:
-                st.error("Event Allocation Fully Sold Out.")
+                remaining = target_event["tickets_total"] - target_event["tickets_sold"]
+                st.metric("Tickets Remaining", remaining)
+                st.metric("Price Per Pass", f"BWP {target_event['ticket_price']:,.2f}")
 
-    # Scenario B: Facility Hire Link
+                if remaining > 0:
+                    with st.form("buy_ticket_flyer_form"):
+                        st.markdown("##### Customer Checkout")
+                        buyer_name = st.text_input("Full Name")
+                        buyer_email = st.text_input("Email Address")
+                        qty = st.number_input("Quantity", min_value=1, max_value=remaining, value=1)
+
+                        if st.form_submit_button("Confirm & Pay Ticket"):
+                            if buyer_name and buyer_email:
+                                total_cost = qty * target_event["ticket_price"]
+                                target_event["tickets_sold"] += qty
+
+                                tkt_obj = {
+                                    "ticket_id": f"tkt_{len(db['ticket_orders'])+1001}",
+                                    "event_id": target_event["event_id"],
+                                    "event_title": target_event["title"],
+                                    "venue_id": target_event["venue_id"],
+                                    "customer_name": buyer_name,
+                                    "customer_email": buyer_email,
+                                    "quantity": qty,
+                                    "total_paid": total_cost,
+                                    "purchase_date": str(date.today()),
+                                    "locked_due_to_suspension": is_suspended
+                                }
+                                db["ticket_orders"].append(tkt_obj)
+                                save_data(db)
+
+                                if is_suspended:
+                                    st.warning("We've Got Your Request! Your booking details are saved. We are just waiting on the facility owner to finalize their portal account details on their end.")
+                                else:
+                                    pdf_tkt = generate_pdf(
+                                        document_title="Digital Entry Ticket Pass",
+                                        fields_dict={
+                                            "Ticket ID": tkt_obj["ticket_id"],
+                                            "Attendee Name": buyer_name,
+                                            "Event Title": target_event["title"],
+                                            "Facility": v_host['name'] if v_host else 'Venue',
+                                            "Date": target_event["date"],
+                                            "Pass Quantity": f"{qty} Pass(es)",
+                                            "Total Paid": f"BWP {total_cost:,.2f}"
+                                        },
+                                        footer_note="Present barcode / digital PDF pass at facility gate for entry verification."
+                                    )
+                                    st.success("Ticket Issued Successfully!")
+                                    st.download_button("Download Digital Ticket PDF", pdf_tkt, f"Ticket_{tkt_obj['ticket_id']}.pdf", "application/pdf")
+                            else:
+                                st.error("Name and Email required.")
+                else:
+                    st.error("Event Allocation Fully Sold Out.")
+
+    # -----------------------------------------------------
+    # PUBLIC ROUTE B: FACILITY HIRE LINK
+    # -----------------------------------------------------
     elif target_venue:
         is_suspended = (target_venue.get("status") == "Suspended")
 
@@ -270,12 +371,17 @@ if param_facility or param_event:
             active_suppliers = db["suppliers"]
             if active_suppliers:
                 for sup in active_suppliers:
-                    st.write(f"**{sup['name']}** *({sup['category']})*")
-                    for item in sup.get("catalogue", []):
-                        chk_item = st.checkbox(f"{item['name']} — BWP {item['price']:,.2f} ({item['unit']})", key=f"cust_{item['item_id']}")
-                        if chk_item:
-                            selected_supp_items.append({"supplier_name": sup["name"], "item_name": item["name"], "price": item["price"]})
-                            supp_cost += item["price"]
+                    with st.expander(f"📦 {sup['name']} ({sup['category']})"):
+                        for item in sup.get("catalogue", []):
+                            ci1, ci2 = st.columns([1, 3])
+                            with ci1:
+                                if item.get("image_url"):
+                                    st.image(item["image_url"], use_container_width=True)
+                            with ci2:
+                                chk_item = st.checkbox(f"**{item['name']}**\n\nPrice: BWP {item['price']:,.2f} ({item['unit']})", key=f"cust_pub_{item['item_id']}")
+                                if chk_item:
+                                    selected_supp_items.append({"supplier_name": sup["name"], "item_name": item["name"], "price": item["price"]})
+                                    supp_cost += item["price"]
 
         if selected_spaces:
             st.divider()
@@ -319,7 +425,7 @@ if param_facility or param_event:
                                     "Supplier Add-ons": ", ".join(bk_obj["supplier_items"]) if bk_obj["supplier_items"] else "None",
                                     "Quoted Total": f"BWP {grand_total:,.2f}"
                                 },
-                                notes_text="This quotation is valid for 7 days. Accept quote to receive invoice for payment."
+                                footer_note="This quotation is valid for 7 days."
                             )
                             st.success("Quotation & Hire Request Issued!")
                             st.download_button("Download Official Quotation PDF", pdf_quote, f"Quotation_{bk_obj['booking_id']}.pdf", "application/pdf")
@@ -327,7 +433,7 @@ if param_facility or param_event:
                         st.error("Name and Email required.")
 
 # =========================================================
-# ROUTE 2: MANAGEMENT CONSOLE WITH PAYMENT LOCK SYSTEM
+# ROUTE 2: MANAGEMENT CONSOLE & MARKETPLACE
 # =========================================================
 else:
     st.sidebar.markdown("### Role Portal Switcher")
@@ -346,23 +452,33 @@ else:
     st.divider()
 
     # -----------------------------------------------------
-    # PLAYER ROLE A: FACILITY OWNER (VENUE MANAGER)
+    # ROLE A: FACILITY OWNER (SINGLE PROFILE RESTRICTION)
     # -----------------------------------------------------
     if user_role == "Facility Owner (Venue)":
-        st.subheader("Facility Management Console")
+        st.subheader("Facility Owner Management Portal")
 
-        v_list = [v["name"] for v in db["venues"]]
-        if not v_list:
-            st.info("No facilities registered. Register your facility below.")
-            active_v_name = None
+        # Single Venue Enforcer
+        if not db["venues"]:
+            st.info("No facility registered. Please register your venue profile below (Note: Only 1 facility profile permitted per account).")
+            with st.form("single_venue_reg_form"):
+                fn = st.text_input("Facility Name")
+                fa = st.text_input("Physical Address")
+                fe = st.text_input("Manager Email")
+                ff = st.text_input("Main Venue Image URL", value="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800")
+                if st.form_submit_button("Register Primary Facility"):
+                    if fn and fa and fe:
+                        new_fac = {"venue_id": f"v_{len(db['venues'])+101}", "name": fn, "address": fa, "manager_email": fe, "status": "Active", "flyer_image_url": ff, "spaces": []}
+                        db["venues"].append(new_fac)
+                        save_data(db)
+                        st.success(f"Facility '{fn}' successfully registered!")
+                        st.rerun()
+                    else:
+                        st.error("All fields required.")
         else:
-            active_v_name = st.selectbox("Active Facility Managed", v_list)
-
-        if active_v_name:
-            cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
+            cur_v = db["venues"][0]  # Single venue model
+            st.success(f"Managing Single Registered Facility: **{cur_v['name']}** ({cur_v['address']})")
+            
             is_v_suspended = (cur_v.get("status") == "Suspended")
-
-            # Check locked pending bookings
             locked_bks = [b for b in db["facility_bookings"] if b["venue_id"] == cur_v["venue_id"] and b.get("locked_due_to_suspension", False)]
             locked_tkts = [t for t in db["ticket_orders"] if t.get("venue_id") == cur_v["venue_id"] and t.get("locked_due_to_suspension", False)]
             total_locked = len(locked_bks) + len(locked_tkts)
@@ -370,34 +486,19 @@ else:
             if is_v_suspended:
                 st.error(f"🔴 ACCOUNT SUSPENDED (UNPAID PLATFORM INVOICE)\n\n"
                          f"You currently have **{total_locked} customer booking(s) / ticket order(s)** locked in the system! "
-                         f"To access your customer details and release their bookings, please settle your monthly platform payment with the administrator.")
+                         f"Settle your monthly platform payment with the administrator to release customer data.")
 
-        t_config, t_events, t_flyers, t_bookings = st.tabs([
-            "Configure Venue & Spaces",
-            "Events & Ticket Setup",
-            "Flyer & WhatsApp Share",
-            "Venue Hire Bookings"
-        ])
+            t_config, t_events, t_flyers, t_bookings = st.tabs([
+                "Configure Venue & Spaces",
+                "Events & Ticket Setup",
+                "Flyer & WhatsApp Share",
+                "Venue Hire Bookings"
+            ])
 
-        with t_config:
-            with st.expander("➕ Register New Facility Profile"):
-                with st.form("reg_fac_form"):
-                    fn = st.text_input("Facility Name")
-                    fa = st.text_input("Address")
-                    fe = st.text_input("Manager Email")
-                    ff = st.text_input("Main Flyer Image URL", value="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800")
-                    if st.form_submit_button("Save Facility Profile"):
-                        new_fac = {"venue_id": f"v_{len(db['venues'])+101}", "name": fn, "address": fa, "manager_email": fe, "status": "Active", "flyer_image_url": ff, "spaces": []}
-                        db["venues"].append(new_fac)
-                        save_data(db)
-                        st.success(f"Facility '{fn}' registered!")
-                        st.rerun()
-
-            if active_v_name:
-                cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
-                st.markdown(f"##### Add Section / Area to {cur_v['name']}")
+            with t_config:
+                st.markdown(f"##### Add Hire Sub-Spaces to {cur_v['name']}")
                 with st.form("add_section_form"):
-                    sec_name = st.text_input("Area Name (e.g. VIP Ballroom, Garden Lawn, Main Stage)")
+                    sec_name = st.text_input("Area Name (e.g. VIP Hall, Garden Lawn, Main Stage)")
                     sec_cap = st.number_input("Guest Capacity", min_value=1, value=200)
                     sec_rate = st.number_input("Daily Hire Price (BWP)", min_value=0.0, value=2500.0)
                     if st.form_submit_button("Add Area Section"):
@@ -407,7 +508,7 @@ else:
                         st.rerun()
 
                 st.divider()
-                st.markdown("##### Configured Facility Sections (Manage / Delete)")
+                st.markdown("##### Configured Facility Sections")
                 if cur_v["spaces"]:
                     for idx, sp in enumerate(cur_v["spaces"]):
                         c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
@@ -422,35 +523,43 @@ else:
                 else:
                     st.caption("No sub-spaces added yet.")
 
-        with t_events:
-            if active_v_name:
-                cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
+            with t_events:
                 with st.form("pub_event_form"):
-                    st.markdown(f"##### Publish Event at {cur_v['name']}")
+                    st.markdown(f"##### Create Event at {cur_v['name']}")
                     et = st.text_input("Event Title")
                     ed = st.date_input("Event Date")
-                    ep = st.number_input("Ticket Price (BWP)", min_value=0.0, value=150.0)
-                    eq = st.number_input("Total Tickets", min_value=1, value=100)
+                    is_free_evt = st.checkbox("Free Entry (No Tickets / Payment Required)", value=False)
+                    
+                    ep = 0.0
+                    eq = 0
+                    if not is_free_evt:
+                        ep = st.number_input("Ticket Price (BWP)", min_value=0.0, value=150.0)
+                        eq = st.number_input("Total Ticket Quantity", min_value=1, value=100)
+                    else:
+                        st.info("Event marked as Free Entry. Attendees will receive a zero-cost digital pass.")
+
                     ef = st.text_input("Event Flyer Image URL", value="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800")
                     edesc = st.text_area("Event Description")
-                    if st.form_submit_button("Publish Event & Enable Tickets"):
-                        new_e = {
-                            "event_id": f"evt_{len(db['events'])+101}",
-                            "venue_id": cur_v["venue_id"],
-                            "title": et, "date": str(ed),
-                            "ticket_price": ep, "tickets_total": eq, "tickets_sold": 0,
-                            "flyer_image_url": ef, "description": edesc
-                        }
-                        db["events"].append(new_e)
-                        save_data(db)
-                        st.success(f"Event '{et}' published!")
-                        st.rerun()
 
-        with t_flyers:
-            if active_v_name:
-                cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
+                    if st.form_submit_button("Publish Event"):
+                        if et:
+                            new_e = {
+                                "event_id": f"evt_{len(db['events'])+101}",
+                                "venue_id": cur_v["venue_id"],
+                                "title": et, "date": str(ed),
+                                "is_free": is_free_evt,
+                                "ticket_price": ep, "tickets_total": eq, "tickets_sold": 0,
+                                "flyer_image_url": ef, "description": edesc
+                            }
+                            db["events"].append(new_e)
+                            save_data(db)
+                            st.success(f"Event '{et}' published successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Event title required.")
+
+            with t_flyers:
                 col_f1, col_f2 = st.columns(2, gap="large")
-
                 with col_f1:
                     st.markdown("##### 1. Facility Hire Sharing Link")
                     fac_link = f"{base_domain}/?facility={cur_v['venue_id']}"
@@ -459,21 +568,17 @@ else:
                     st.markdown(f'<a href="https://wa.me/?text={wa_fac_msg}" target="_blank"><button style="width:100%; height:40px;">Share Facility on WhatsApp</button></a>', unsafe_allow_html=True)
 
                 with col_f2:
-                    st.markdown("##### 2. Event Ticket Selling Link")
+                    st.markdown("##### 2. Event Ticket / Access Link")
                     v_events = [e for e in db["events"] if e["venue_id"] == cur_v["venue_id"]]
                     if v_events:
                         sel_e = st.selectbox("Select Event to Share", [e["title"] for e in v_events])
                         matched_e = next(e for e in v_events if e["title"] == sel_e)
                         evt_link = f"{base_domain}/?event={matched_e['event_id']}"
-                        wa_evt_msg = urllib.parse.quote(f"Get your tickets for {matched_e['title']} here:\n{evt_link}")
-                        st.text_input("Event Ticket Link", value=evt_link)
-                        st.markdown(f'<a href="https://wa.me/?text={wa_evt_msg}" target="_blank"><button style="width:100%; height:40px;">Share Event Ticket on WhatsApp</button></a>', unsafe_allow_html=True)
+                        wa_evt_msg = urllib.parse.quote(f"Access tickets/passes for {matched_e['title']}:\n{evt_link}")
+                        st.text_input("Event Link", value=evt_link)
+                        st.markdown(f'<a href="https://wa.me/?text={wa_evt_msg}" target="_blank"><button style="width:100%; height:40px;">Share Event on WhatsApp</button></a>', unsafe_allow_html=True)
 
-        with t_bookings:
-            if active_v_name:
-                cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
-                is_v_suspended = (cur_v.get("status") == "Suspended")
-
+            with t_bookings:
                 if is_v_suspended:
                     st.error("🔒 BOOKINGS LOCKED: Pay your platform monthly subscription invoice to unlock customer details and confirm pending bookings.")
                 else:
@@ -494,52 +599,92 @@ else:
                         st.info("No active facility bookings found.")
 
     # -----------------------------------------------------
-    # PLAYER ROLE B: FACILITY SUPPORTER (SUPPLIER)
+    # ROLE B: FACILITY SUPPORTER (SINGLE PROFILE + TEMPLATES)
     # -----------------------------------------------------
     elif user_role == "Facility Supporter (Supplier)":
-        st.subheader("Facility Supporter Catalogue Console")
+        st.subheader("Facility Supporter Portal (Florists, Caterers, Decor)")
 
-        s_list = [s["name"] for s in db["suppliers"]]
-        if not s_list:
-            st.info("No suppliers registered yet.")
-            active_s_name = None
+        # Single Supplier Enforcer
+        if not db["suppliers"]:
+            st.info("No supplier profile registered. Create your profile below to auto-load category templates (1 supplier profile allowed).")
+            with st.form("single_sup_reg_form"):
+                sn = st.text_input("Business / Supporter Name")
+                sc = st.selectbox("Category", ["Florists & Decorators", "Catering & Equipment Rentals"])
+                se = st.text_input("Contact Email")
+                if st.form_submit_button("Register Primary Supporter Profile"):
+                    if sn and se:
+                        init_cat = DEFAULT_FLORIST_CATALOGUE if sc == "Florists & Decorators" else DEFAULT_CATERING_CATALOGUE
+                        new_sup = {
+                            "supplier_id": f"sup_{len(db['suppliers'])+101}",
+                            "name": sn, "category": sc, "email": se,
+                            "status": "Active", "catalogue": init_cat
+                        }
+                        db["suppliers"].append(new_sup)
+                        save_data(db)
+                        st.success("Profile Registered with Category Templates loaded!")
+                        st.rerun()
+                    else:
+                        st.error("Name and Email required.")
         else:
-            active_s_name = st.selectbox("Active Supporter Profile", s_list)
+            cur_s = db["suppliers"][0] # Single supplier model
+            st.success(f"Managing Registered Supporter: **{cur_s['name']}** ({cur_s['category']})")
 
-        if active_s_name:
-            cur_s = next(s for s in db["suppliers"] if s["name"] == active_s_name)
             if cur_s.get("status") == "Suspended":
                 st.error("🔴 ACCOUNT SUSPENDED: Settle outstanding monthly billing invoices with the system admin to unlock supplier requests.")
 
-        tab_s_reg, t_cat = st.tabs(["Register Profile", "Manage Catalogue & Pricing"])
+            t_cat_view, t_add_item = st.tabs(["Manage Comprehensive Catalogue & Images", "Add Custom Item"])
 
-        with tab_s_reg:
-            with st.form("reg_sup_form"):
-                sn = st.text_input("Business Name")
-                sc = st.selectbox("Category", ["Florists & Decorators", "Catering & Cakes", "Audio, Visual & DJ", "Security & Support Services"])
-                se = st.text_input("Contact Email")
-                if st.form_submit_button("Register Supporter Profile"):
-                    db["suppliers"].append({"supplier_id": f"sup_{len(db['suppliers'])+101}", "name": sn, "category": sc, "email": se, "status": "Active", "catalogue": []})
-                    save_data(db)
-                    st.success("Profile Created!")
-                    st.rerun()
+            with t_cat_view:
+                st.markdown(f"##### Catalogue for {cur_s['name']} ({cur_s['category']})")
+                st.caption("Review tiered pricing ranges (High End, Mid Range, Low End) and image placeholders.")
 
-        with t_cat:
-            if active_s_name:
-                cur_s = next(s for s in db["suppliers"] if s["name"] == active_s_name)
-                with st.form("add_cat_item"):
-                    st.markdown(f"##### Add Item to {cur_s['name']} Catalogue")
-                    iname = st.text_input("Item / Service Name")
-                    iprice = st.number_input("Unit Price (BWP)", min_value=0.0, value=1500.0)
-                    iunit = st.text_input("Unit Type", value="per event")
-                    if st.form_submit_button("Add Catalogue Item"):
-                        cur_s["catalogue"].append({"item_id": f"itm_{len(cur_s['catalogue'])+101}", "name": iname, "price": iprice, "unit": iunit})
-                        save_data(db)
-                        st.success(f"Item '{iname}' added!")
-                        st.rerun()
+                for idx, item in enumerate(cur_s.get("catalogue", [])):
+                    with st.expander(f"📦 [{item.get('tier', 'Standard')}] {item['name']} - BWP {item['price']:,.2f}"):
+                        ci1, ci2 = st.columns([1, 3])
+                        with ci1:
+                            if item.get("image_url"):
+                                st.image(item["image_url"], caption=item["name"], use_container_width=True)
+                        with ci2:
+                            new_name = st.text_input("Item Name", value=item["name"], key=f"item_n_{idx}")
+                            new_price = st.number_input("Price (BWP)", value=float(item["price"]), key=f"item_p_{idx}")
+                            new_img = st.text_input("Image URL Placeholder", value=item.get("image_url", ""), key=f"item_img_{idx}")
+                            
+                            col_b1, col_b2 = st.columns(2)
+                            if col_b1.button("Save Changes", key=f"save_itm_{idx}"):
+                                item["name"] = new_name
+                                item["price"] = new_price
+                                item["image_url"] = new_img
+                                save_data(db)
+                                st.success("Item updated!")
+                                st.rerun()
+                            if col_b2.button("Remove Item", key=f"del_itm_{idx}"):
+                                cur_s["catalogue"].pop(idx)
+                                save_data(db)
+                                st.warning("Item removed!")
+                                st.rerun()
+
+            with t_add_item:
+                with st.form("add_cat_item_custom"):
+                    st.markdown("##### Add New Service / Product Option")
+                    iname = st.text_input("Item Name")
+                    itier = st.selectbox("Pricing Tier", ["High End (Premium)", "Mid Range (Standard)", "Low End (Budget)"])
+                    iprice = st.number_input("Unit Price (BWP)", min_value=0.0, value=500.0)
+                    iunit = st.text_input("Unit Type", value="per item")
+                    iimg = st.text_input("Image URL Placeholder", value="https://images.unsplash.com/photo-1519225421980-715cb0215aed?w=600")
+                    if st.form_submit_button("Add to Catalogue"):
+                        if iname:
+                            cur_s["catalogue"].append({
+                                "item_id": f"itm_cust_{len(cur_s['catalogue'])+101}",
+                                "category": "Custom Option",
+                                "name": iname, "price": iprice, "unit": iunit,
+                                "tier": itier, "image_url": iimg
+                            })
+                            save_data(db)
+                            st.success("New item added to catalogue!")
+                            st.rerun()
 
     # -----------------------------------------------------
-    # PLAYER ROLE C: SUPER USER (PLATFORM OWNER)
+    # ROLE C: SUPER USER (PLATFORM OWNER CONTROL)
     # -----------------------------------------------------
     elif user_role == "Super User (Platform Owner)":
         st.subheader("Platform Administration & Account Control")
@@ -553,12 +698,12 @@ else:
         tab_susp, tab_inv, tab_logs = st.tabs([
             "Account Suspensions",
             "Monthly Portal Invoicing",
-            "System Records & Purge"
+            "System Records & Database"
         ])
 
         with tab_susp:
             st.markdown("##### Manage Account Status & Automatic Payment Lock Controls")
-            st.caption("When suspended, customer bookings continue to accumulate in secret, prompting non-paying accounts to pay up to see their orders.")
+            st.caption("When suspended, customer bookings accumulate silently, prompting non-paying accounts to settle billing.")
 
             st.markdown("### 1. Facilities (Venues)")
             for v in db["venues"]:
@@ -570,13 +715,12 @@ else:
                 if v.get("status") == "Suspended":
                     if col_v3.button("Reactivate & Release Bookings", key=f"react_v_{v['venue_id']}"):
                         v["status"] = "Active"
-                        # Unlock hidden bookings
                         for b in db["facility_bookings"]:
                             if b["venue_id"] == v["venue_id"]: b["locked_due_to_suspension"] = False
                         for t in db["ticket_orders"]:
                             if t.get("venue_id") == v["venue_id"]: t["locked_due_to_suspension"] = False
                         save_data(db)
-                        st.success(f"Reactivated {v['name']}! All hidden bookings are now visible to venue.")
+                        st.success(f"Reactivated {v['name']}!")
                         st.rerun()
                 else:
                     if col_v3.button("Suspend Venue (Non-Payment)", key=f"susp_v_{v['venue_id']}"):
@@ -641,17 +785,17 @@ else:
                             "Date Issued": str(date.today()),
                             "Total Payable": f"BWP {sub_fee:,.2f}"
                         },
-                        footer_note="Payment due within 15 days of invoice date. Non-payment locks customer booking access."
+                        footer_note="Payment due within 15 days of invoice date."
                     )
                     st.success(f"Invoice {inv_obj['invoice_id']} issued to {recipient_name}!")
                     st.download_button("Download Subscription Invoice PDF", pdf_inv, f"Invoice_{inv_obj['invoice_id']}.pdf", "application/pdf")
 
         with tab_logs:
-            st.markdown("##### Master System Record Log")
+            st.markdown("##### Master System JSON Database")
             st.json(db)
 
     # -----------------------------------------------------
-    # PLAYER ROLE D: CUSTOMER MARKETPLACE SEARCH
+    # ROLE D: CUSTOMER MARKETPLACE SEARCH (PORTAL CHECKOUT)
     # -----------------------------------------------------
     elif user_role == "Customer Marketplace Search":
         st.subheader("Browse Facilities & Public Events")
@@ -662,12 +806,133 @@ else:
             for v in db["venues"]:
                 st.markdown(f"### {v['name']}")
                 st.write(f"**Address:** {v['address']}")
-                st.markdown(f"🔗 **Direct Facility Link:** `{base_domain}/?facility={v['venue_id']}`")
+                st.markdown(f"🔗 **Direct Facility Booking Link:** `{base_domain}/?facility={v['venue_id']}`")
+                
+                with st.expander("Book Facility Directly via Portal"):
+                    is_suspended = (v.get("status") == "Suspended")
+                    
+                    st.markdown("#### Select Sub-Spaces to Hire")
+                    selected_spaces = []
+                    sp_cost = 0.0
+                    for sp in v.get("spaces", []):
+                        if st.checkbox(f"{sp['name']} (Cap: {sp['capacity']}) - BWP {sp['daily_rate']:,.2f}", key=f"mkt_sp_{sp['space_id']}"):
+                            selected_spaces.append(sp)
+                            sp_cost += sp["daily_rate"]
+
+                    h_date = st.date_input("Hire Date", min_value=date.today(), key=f"mkt_d_{v['venue_id']}")
+                    
+                    st.markdown("#### Select Supplier Add-Ons")
+                    selected_supps = []
+                    sup_cost = 0.0
+                    for sup in db["suppliers"]:
+                        for item in sup.get("catalogue", []):
+                            if st.checkbox(f"{sup['name']} - {item['name']} (BWP {item['price']:,.2f})", key=f"mkt_item_{v['venue_id']}_{item['item_id']}"):
+                                selected_supps.append(item)
+                                sup_cost += item["price"]
+
+                    total_mkt = sp_cost + sup_cost
+                    st.markdown(f"**Grand Total Estimate: BWP {total_mkt:,.2f}**")
+
+                    if selected_spaces:
+                        with st.form(f"mkt_hire_form_{v['venue_id']}"):
+                            cust_n = st.text_input("Full Name")
+                            cust_e = st.text_input("Email Address")
+                            if st.form_submit_button("Confirm Booking Request"):
+                                if cust_n and cust_e:
+                                    bk_obj = {
+                                        "booking_id": f"bk_{len(db['facility_bookings'])+1001}",
+                                        "venue_id": v["venue_id"],
+                                        "venue_name": v["name"],
+                                        "customer_name": cust_n,
+                                        "customer_email": cust_e,
+                                        "hire_date": str(h_date),
+                                        "booked_spaces": [s["name"] for s in selected_spaces],
+                                        "supplier_items": [i["name"] for i in selected_supps],
+                                        "total_amount": total_mkt,
+                                        "status": "Quotation Pending Acceptance",
+                                        "locked_due_to_suspension": is_suspended
+                                    }
+                                    db["facility_bookings"].append(bk_obj)
+                                    save_data(db)
+
+                                    if is_suspended:
+                                        st.warning("We've Got Your Request! Your booking details are saved. We are just waiting on the facility owner to finalize their portal account details on their end.")
+                                    else:
+                                        pdf_q = generate_pdf("Official Quotation", {"Ref": bk_obj["booking_id"], "Customer": cust_n, "Venue": v["name"], "Total": f"BWP {total_mkt:,.2f}"})
+                                        st.success("Booking request logged successfully!")
+                                        st.download_button("Download Quotation PDF", pdf_q, f"Quotation_{bk_obj['booking_id']}.pdf")
+                                else:
+                                    st.error("Fill in name and email.")
                 st.divider()
 
         with t_search_evt:
             for e in db["events"]:
+                v_host = next((v for v in db["venues"] if v["venue_id"] == e["venue_id"]), None)
                 st.markdown(f"### {e['title']}")
-                st.write(f"**Date:** {e['date']} | **Price:** BWP {e['ticket_price']:,.2f}")
+                st.write(f"**Date:** {e['date']} | **Location:** {v_host['name'] if v_host else 'Main Grounds'}")
                 st.markdown(f"🔗 **Direct Ticket Link:** `{base_domain}/?event={e['event_id']}`")
+                
+                with st.expander("Get Tickets / Passes via Portal"):
+                    is_suspended = (v_host and v_host.get("status") == "Suspended")
+                    is_free = e.get("is_free", False)
+
+                    if is_free:
+                        st.info("🎉 Free Entry Event")
+                        with st.form(f"mkt_free_form_{e['event_id']}"):
+                            fn_c = st.text_input("Name")
+                            fe_c = st.text_input("Email")
+                            if st.form_submit_button("Claim Free Access Pass"):
+                                if fn_c and fe_c:
+                                    tkt_obj = {
+                                        "ticket_id": f"tkt_free_{len(db['ticket_orders'])+1001}",
+                                        "event_id": e["event_id"],
+                                        "event_title": e["title"],
+                                        "venue_id": e["venue_id"],
+                                        "customer_name": fn_c,
+                                        "customer_email": fe_c,
+                                        "quantity": 1,
+                                        "total_paid": 0.0,
+                                        "purchase_date": str(date.today()),
+                                        "locked_due_to_suspension": is_suspended
+                                    }
+                                    db["ticket_orders"].append(tkt_obj)
+                                    save_data(db)
+
+                                    if is_suspended:
+                                        st.warning("We've Got Your Request! Your booking details are saved. We are just waiting on the facility owner to finalize their portal account details on their end.")
+                                    else:
+                                        pdf_p = generate_pdf("Free Entry Pass", {"Pass ID": tkt_obj["ticket_id"], "Name": fn_c, "Event": e["title"]})
+                                        st.success("Pass issued!")
+                                        st.download_button("Download Free Pass PDF", pdf_p, f"Pass_{tkt_obj['ticket_id']}.pdf")
+                    else:
+                        st.write(f"**Price:** BWP {e['ticket_price']:,.2f}")
+                        with st.form(f"mkt_tkt_form_{e['event_id']}"):
+                            tn_c = st.text_input("Name")
+                            te_c = st.text_input("Email")
+                            t_qty = st.number_input("Quantity", min_value=1, value=1)
+                            if st.form_submit_button("Buy Ticket"):
+                                if tn_c and te_c:
+                                    tot = t_qty * e["ticket_price"]
+                                    e["tickets_sold"] += t_qty
+                                    tkt_obj = {
+                                        "ticket_id": f"tkt_{len(db['ticket_orders'])+1001}",
+                                        "event_id": e["event_id"],
+                                        "event_title": e["title"],
+                                        "venue_id": e["venue_id"],
+                                        "customer_name": tn_c,
+                                        "customer_email": te_c,
+                                        "quantity": t_qty,
+                                        "total_paid": tot,
+                                        "purchase_date": str(date.today()),
+                                        "locked_due_to_suspension": is_suspended
+                                    }
+                                    db["ticket_orders"].append(tkt_obj)
+                                    save_data(db)
+
+                                    if is_suspended:
+                                        st.warning("We've Got Your Request! Your booking details are saved. We are just waiting on the facility owner to finalize their portal account details on their end.")
+                                    else:
+                                        pdf_t = generate_pdf("Digital Entry Pass", {"Ticket ID": tkt_obj["ticket_id"], "Name": tn_c, "Event": e["title"], "Paid": f"BWP {tot:,.2f}"})
+                                        st.success("Ticket Purchased!")
+                                        st.download_button("Download Ticket PDF", pdf_t, f"Ticket_{tkt_obj['ticket_id']}.pdf")
                 st.divider()
