@@ -83,31 +83,31 @@ def load_data():
             "venues": [
                 {
                     "venue_id": "v_central_park",
-                    "name": "Central Park Arena",
-                    "address": "123 Park Ave, New York, NY",
+                    "name": "Gaborone International Convention Centre",
+                    "address": "Plot 54367, Western Bypass, Gaborone",
                     "capacity": 5000,
-                    "manager_email": "venue_admin@example.com"
+                    "manager_email": "venue_admin@example.bw"
                 }
             ],
             "events": [
                 {
                     "event_id": "evt_101",
-                    "title": "Summer Music Festival 2026",
+                    "title": "Botswana Music & Cultural Festival 2026",
                     "date": "2026-10-15",
-                    "location": "Central Park Arena",
+                    "location": "Gaborone International Convention Centre",
                     "venue_id": "v_central_park",
                     "tickets_total": 100,
                     "tickets_sold": 15,
-                    "price_per_ticket": 45.0,
+                    "price_per_ticket": 350.0,
                     "flyer_image_url": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800",
-                    "description": "Annual live musical performance event."
+                    "description": "Annual live musical performance and cultural event."
                 }
             ],
             "vendors": [
                 {
                     "vendor_id": "v_alice",
-                    "name": "Alice Promos & VIP Booking",
-                    "email": "alice@example.com",
+                    "name": "Kalahari Promos & VIP Booking",
+                    "email": "alice@example.bw",
                     "bio": "Official affiliate promotion partner."
                 }
             ],
@@ -116,7 +116,7 @@ def load_data():
                     "service_id": "srv_cat_01",
                     "title": "Gourmet Catering & Bar Services",
                     "category": "Catering & Refreshments",
-                    "provider_name": "Apex Hospitality",
+                    "provider_name": "Apex Hospitality Botswana",
                     "status": "Confirmed"
                 }
             ]
@@ -140,7 +140,7 @@ def generate_pdf_receipt(cust_name, cust_email, event_title, qty, price_per_tick
     pdf.set_font("Helvetica", "B", 18)
     pdf.cell(0, 10, "OFFICIAL PAYMENT RECEIPT", ln=True, align="L")
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 6, "Issued by Event Engine Platform Operations", ln=True, align="L")
+    pdf.cell(0, 6, "Issued by Event Engine Platform Operations (Botswana)", ln=True, align="L")
     pdf.ln(8)
     
     pdf.set_font("Helvetica", "B", 10)
@@ -156,11 +156,11 @@ def generate_pdf_receipt(cust_name, cust_email, event_title, qty, price_per_tick
     pdf.cell(0, 8, f"Event Designation: {event_title}", ln=True)
     pdf.set_font("Helvetica", "", 10)
     pdf.cell(0, 6, f"Quantity Issued: {qty}", ln=True)
-    pdf.cell(0, 6, f"Unit Ticket Price: ${price_per_ticket:.2f}", ln=True)
+    pdf.cell(0, 6, f"Unit Ticket Price: BWP {price_per_ticket:.2f}", ln=True)
     
     total = qty * price_per_ticket
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 10, f"Total Transaction Amount: ${total:.2f}", ln=True)
+    pdf.cell(0, 10, f"Total Transaction Amount: BWP {total:.2f}", ln=True)
     pdf.ln(8)
     
     pdf.set_font("Helvetica", "I", 9)
@@ -207,7 +207,7 @@ if param_vendor and param_event:
             st.write(f"**Description:** {sel_evt.get('description', 'Standard entry pass.')}")
             st.write(f"**Scheduled Date:** {sel_evt['date']}")
             st.write(f"**Facility Location:** {sel_evt['location']}")
-            st.write(f"**Unit Price:** ${sel_evt['price_per_ticket']:.2f}")
+            st.write(f"**Unit Price:** BWP {sel_evt['price_per_ticket']:.2f}")
             
             tickets_left = sel_evt["tickets_total"] - sel_evt["tickets_sold"]
             st.metric("Remaining Inventory", tickets_left)
@@ -289,7 +289,7 @@ else:
         total_sold = sum(e["tickets_sold"] for e in db["events"])
         total_capacity = sum(e["tickets_total"] for e in db["events"])
         
-        m_col1.metric("Gross Revenue", f"${total_gross:,.2f}")
+        m_col1.metric("Gross Revenue", f"BWP {total_gross:,.2f}")
         m_col2.metric("Tickets Sold", total_sold)
         m_col3.metric("Fulfillment Rate", f"{(total_sold/total_capacity*100) if total_capacity else 0:.1f}%")
         
@@ -297,7 +297,7 @@ else:
         st.markdown("##### Event Breakdown")
         for evt in db["events"]:
             rev = evt["tickets_sold"] * evt["price_per_ticket"]
-            st.write(f"**{evt['title']}** | Allocation: `{evt['tickets_sold']}/{evt['tickets_total']}` | Total Revenue: `${rev:,.2f}`")
+            st.write(f"**{evt['title']}** | Allocation: `{evt['tickets_sold']}/{evt['tickets_total']}` | Total Revenue: `BWP {rev:,.2f}`")
 
     # --- TAB 2: FLYER BUILDER & LINK GENERATOR ---
     with tab_flyer_builder:
@@ -351,9 +351,9 @@ else:
             with st.form("new_event_form"):
                 new_title = st.text_input("Event Designation")
                 new_date = st.date_input("Scheduled Date")
-                new_loc = st.text_input("Venue Facility Location", value="Central Park Arena")
+                new_loc = st.text_input("Venue Facility Location", value="Gaborone International Convention Centre")
                 new_total = st.number_input("Maximum Capacity Allocation", min_value=1, value=100)
-                new_price = st.number_input("Unit Price ($)", min_value=0.0, value=25.0)
+                new_price = st.number_input("Unit Price (BWP)", min_value=0.0, value=250.0)
                 new_flyer = st.text_input("Flyer Image URL", value="https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800")
                 new_desc = st.text_area("Description Summary", value="Official scheduled event.")
                 
@@ -404,25 +404,25 @@ else:
             platform_fee = total_rev * 0.05
             net_payout = total_rev - platform_fee
             
-            col_b1.metric("Gross Revenue", f"${total_rev:,.2f}")
-            col_b2.metric("Platform Retention (5.0%)", f"${platform_fee:,.2f}")
-            col_b3.metric("Net Facility Payout", f"${net_payout:,.2f}")
+            col_b1.metric("Gross Revenue", f"BWP {total_rev:,.2f}")
+            col_b2.metric("Platform Retention (5.0%)", f"BWP {platform_fee:,.2f}")
+            col_b3.metric("Net Facility Payout", f"BWP {net_payout:,.2f}")
             
             st.divider()
             st.markdown("##### Generate Administrative Invoice")
-            st.text_input("Billed Entity Name", value="Central Park Arena Operations LLC")
+            st.text_input("Billed Entity Name", value="Gaborone International Convention Centre Operations Pty Ltd")
             st.text_input("Applied Platform Fee Margin", value="5.0%")
             st.button("Export Official Invoice Record")
             
         elif user_role == "Venue Manager":
             st.markdown("##### Venue Settlement Statement")
             st.info("Settlements are processed on a rolling 7-day cycle net of platform service processing fees.")
-            st.write("**Processed Ticket Sales:** $675.00")
-            st.write("**Platform Overhead Fee (5.0%):** -$33.75")
-            st.write("**Net Funds Disbursed:** $641.25")
+            st.write("**Processed Ticket Sales:** BWP 5,250.00")
+            st.write("**Platform Overhead Fee (5.0%):** -BWP 262.50")
+            st.write("**Net Funds Disbursed:** BWP 4,987.50")
             
         else:
             st.markdown("##### Affiliate Commission Statement")
             st.info("Commission payouts are calculated directly from verified referral link conversions.")
-            st.write("**Total Commission Accrued:** $67.50")
+            st.write("**Total Commission Accrued:** BWP 525.00")
             st.write("**Payout Status:** Settled")
