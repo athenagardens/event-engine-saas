@@ -52,16 +52,11 @@ def inject_enterprise_styles():
             .profile-card {
                 padding: 1.8rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1.5rem;
             }
-            .badge-paid {
-                background-color: #059669; color: #FFFFFF; padding: 0.25rem 0.6rem;
-                border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-            }
-            .badge-pending {
-                background-color: #D97706; color: #FFFFFF; padding: 0.25rem 0.6rem;
-                border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-            }
             .logo-img {
                 max-height: 60px; max-width: 180px; object-fit: contain;
+            }
+            .item-card {
+                background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -111,6 +106,7 @@ with st.sidebar.expander("System Utilities"):
     if st.button("Purge & Reset System Database", type="primary", use_container_width=True):
         db = {"venues": [], "supporters": [], "events": [], "bookings": [], "tickets": [], "vendor_invoices": []}
         save_data(db)
+        st.session_state.clear()
         st.success("Database purged successfully.")
         st.rerun()
 
@@ -137,7 +133,6 @@ if user_role == "Public Portal (Bookings & Ticketing)":
             sel_venue = next(v for v in venues_list if v.get("name") == sel_v_name)
 
             v_brand_color = sel_venue.get("brand_color", "#0F172A")
-            v_secondary_color = sel_venue.get("brand_secondary", "#2563EB")
             v_logo = sel_venue.get("logo_url", DEFAULT_LOGO)
             v_whatsapp = sel_venue.get("whatsapp_no", "Not Specified")
 
@@ -209,21 +204,31 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                                     sup_total = 0.0
 
                                     for t in templates:
-                                        item_key = f"{sup.get('supporter_id')}_{t.get('item_name')}"
-                                        qty = st.number_input(
-                                            f"{t.get('item_name')} — BWP {t.get('unit_price'):,.2f} / {t.get('unit_type')}",
-                                            min_value=0, value=0, key=item_key
-                                        )
-                                        if qty > 0:
-                                            cost = qty * t.get("unit_price")
-                                            sup_total += cost
-                                            sup_items.append({
-                                                "item_name": t.get("item_name"),
-                                                "unit_type": t.get("unit_type"),
-                                                "qty": qty,
-                                                "unit_price": t.get("unit_price"),
-                                                "subtotal": cost
-                                            })
+                                        t_col1, t_col2 = st.columns([1, 3])
+                                        with t_col1:
+                                            if t.get("image_url"):
+                                                st.image(t.get("image_url"), use_container_width=True)
+                                        with t_col2:
+                                            st.markdown(f"**{t.get('item_name')}** — BWP {t.get('unit_price'):,.2f} / {t.get('unit_type')}")
+                                            if t.get("description"):
+                                                st.caption(t.get("description"))
+                                            
+                                            item_key = f"{sup.get('supporter_id')}_{t.get('item_name')}"
+                                            qty = st.number_input(
+                                                "Select Quantity", min_value=0, value=0, key=item_key
+                                            )
+                                            if qty > 0:
+                                                cost = qty * t.get("unit_price")
+                                                sup_total += cost
+                                                sup_items.append({
+                                                    "item_name": t.get("item_name"),
+                                                    "unit_type": t.get("unit_type"),
+                                                    "qty": qty,
+                                                    "unit_price": t.get("unit_price"),
+                                                    "subtotal": cost
+                                                })
+                                        st.divider()
+
                                     if sup_items:
                                         selected_vendor_orders[sup.get("supporter_id")] = {
                                             "supporter": sup,
@@ -526,7 +531,6 @@ elif user_role == "Facility Owner Console":
                                 st.rerun()
                     st.divider()
 
-        # FACILITY FINANCIAL REPORTING
         with t_reports:
             st.markdown("#### 📊 Facility Financial Statements & Date Filter")
             
@@ -573,15 +577,17 @@ elif user_role == "Facility Owner Console":
 # 6. MODULE 3: FACILITY SUPPORTER CONSOLE (VENDORS) & REPORTS
 # ---------------------------------------------------------
 elif user_role == "Facility Supporter Console (Vendors)":
-    st.title("Facility Supporter Console & Vendor Invoicing")
-    st.caption("Manage vendor profiles, customize logo branding, verify direct customer POPs, and view independent reports.")
+    st.title("Facility Supporter Console & Service Offerings")
+    st.caption("Manage vendor profiles, list offering packages with pictures & pricing, verify customer POPs, and view earnings.")
     st.divider()
 
     supporters = db.get("supporters", [])
 
-    if not supporters:
-        st.info("👋 Register your business profile to start accepting supplier packages.")
+    sup_action = st.radio("Vendor Account Options:", ["Select Existing Account", "Create New Vendor Account"], horizontal=True)
+
+    if sup_action == "Create New Vendor Account":
         with st.form("supporter_reg_form"):
+            st.markdown("### 📝 Register New Supporter / Vendor Account")
             s_name = st.text_input("Business Name*", placeholder="Kalahari Decor & Catering")
             s_cat = st.selectbox("Category*", ["Catering & Cutlery", "Stage & Decor Design", "Sound & AV", "Florist", "Security"])
             s_person = st.text_input("Contact Person*")
@@ -591,11 +597,12 @@ elif user_role == "Facility Supporter Console (Vendors)":
             s_color = st.color_picker("Corporate Brand Color", "#1E293B")
             s_logo_file = st.file_uploader("Upload Company Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
 
-            if st.form_submit_button("Create Vendor Account"):
+            if st.form_submit_button("Create Vendor Account", type="primary"):
                 if s_name and s_email and s_phone and s_bank:
+                    new_sup_id = f"sup_{len(supporters)+101}"
                     logo_url = process_image_upload(s_logo_file, DEFAULT_LOGO)
                     new_sup = {
-                        "supporter_id": f"sup_{len(supporters)+101}",
+                        "supporter_id": new_sup_id,
                         "business_name": s_name,
                         "category": s_cat,
                         "contact_person": s_person,
@@ -608,146 +615,197 @@ elif user_role == "Facility Supporter Console (Vendors)":
                     }
                     db.setdefault("supporters", []).append(new_sup)
                     save_data(db)
-                    st.success("Vendor Profile Created!")
+                    st.session_state["active_supporter_id"] = new_sup_id
+                    st.success(f"Vendor Profile '{s_name}' Created Successfully!")
                     st.rerun()
+                else:
+                    st.error("Please fill in all mandatory fields (*).")
+
     else:
-        sel_sup_name = st.selectbox("Select Active Vendor Account:", [s.get("business_name") for s in supporters])
-        cur_sup = next(s for s in supporters if s.get("business_name") == sel_sup_name)
+        if not supporters:
+            st.info("No vendor accounts found. Please choose 'Create New Vendor Account' above.")
+        else:
+            sup_options = {s.get("business_name"): s.get("supporter_id") for s in supporters}
+            
+            default_index = 0
+            if "active_supporter_id" in st.session_state:
+                matched = [i for i, (k, v) in enumerate(sup_options.items()) if v == st.session_state["active_supporter_id"]]
+                if matched:
+                    default_index = matched[0]
 
-        s_logo = cur_sup.get("logo_url", DEFAULT_LOGO)
-        s_color = cur_sup.get("brand_color", "#1E293B")
+            sel_sup_name = st.selectbox("Select Active Vendor Profile:", list(sup_options.keys()), index=default_index)
+            cur_sup = next(s for s in supporters if s.get("business_name") == sel_sup_name)
 
-        st.markdown(f"""
-            <div class="profile-card" style="background: {s_color};">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h2 style="color: #FFFFFF !important; margin: 0;">🚚 {cur_sup.get('business_name')}</h2>
-                        <p style="color: #F1F5F9 !important; margin-top: 4px;">
-                            <b>Category:</b> {cur_sup.get('category')} | <b>WhatsApp POP:</b> {cur_sup.get('phone')}
-                        </p>
+            s_logo = cur_sup.get("logo_url", DEFAULT_LOGO)
+            s_color = cur_sup.get("brand_color", "#1E293B")
+
+            st.markdown(f"""
+                <div class="profile-card" style="background: {s_color};">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h2 style="color: #FFFFFF !important; margin: 0;">🚚 {cur_sup.get('business_name')}</h2>
+                            <p style="color: #F1F5F9 !important; margin-top: 4px;">
+                                <b>Category:</b> {cur_sup.get('category')} | <b>WhatsApp POP:</b> {cur_sup.get('phone')}
+                            </p>
+                        </div>
+                        <img src="{s_logo}" class="logo-img" style="background: white; padding: 4px; border-radius: 6px;">
                     </div>
-                    <img src="{s_logo}" class="logo-img" style="background: white; padding: 4px; border-radius: 6px;">
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        v_tab1, v_tab2, v_tab3, v_tab4 = st.tabs([
-            "Service Package Rates", 
-            "Branding & Payment Setup",
-            "✅ Verify Customer POPs", 
-            "📊 Vendor Financial Statements & Reports"
-        ])
+            v_tab1, v_tab2, v_tab3, v_tab4 = st.tabs([
+                "Service Packages & Quotation Templates", 
+                "Branding & Payment Details",
+                "✅ Verify Customer POPs", 
+                "📊 Vendor Financial Statements & Reports"
+            ])
 
-        # PACKAGE RATES
-        with v_tab1:
-            st.markdown("#### Quotation Item Templates")
-            with st.form("add_template_item_form"):
-                i_name = st.text_input("Service Item Name", placeholder="Buffet Catering (3-Course)")
-                i_type = st.selectbox("Unit Type", ["Per Guest", "Per Day", "Flat Rate", "Per Item Set"])
-                i_price = st.number_input("Unit Rate Price (BWP)", min_value=1.0, value=150.0)
+            # SERVICE OFFERINGS & QUOTATION TEMPLATES
+            with v_tab1:
+                st.markdown("#### Add & Manage What You Provide (Service Packages, Pricing & Photos)")
+                
+                with st.expander("➕ Create New Service Package / Item Template", expanded=True):
+                    with st.form("add_template_item_form"):
+                        i_name = st.text_input("Service Item / Package Name*", placeholder="3-Course Buffet Catering")
+                        i_desc = st.text_area("Service Description / Specs", placeholder="Includes starters, 2 meats, salads, desserts & cutlery setup.")
+                        
+                        i_col1, i_col2 = st.columns(2)
+                        with i_col1:
+                            i_type = st.selectbox("Unit / Charge Type*", ["Per Guest", "Per Day", "Flat Rate", "Per Item Set", "Per Hour"])
+                        with i_col2:
+                            i_price = st.number_input("Unit Price Rate (BWP)*", min_value=1.0, value=150.0)
+                        
+                        i_photo = st.file_uploader("Upload Item Photo / Showcase Image", type=["png", "jpg", "jpeg"])
 
-                if st.form_submit_button("Add Rate Item"):
-                    if i_name:
-                        cur_sup.setdefault("quotation_templates", []).append({
-                            "item_name": i_name,
-                            "unit_type": i_type,
-                            "unit_price": i_price
-                        })
-                        save_data(db)
-                        st.success(f"Added item '{i_name}'")
-                        st.rerun()
-
-            st.divider()
-            for it in cur_sup.get("quotation_templates", []):
-                st.write(f"• **{it.get('item_name')}** — BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})")
-
-        # BRANDING & PAYMENTS
-        with v_tab2:
-            st.markdown("#### Update Branding & Payment Details")
-            with st.form("edit_vendor_profile"):
-                u_phone = st.text_input("WhatsApp Number for POPs", value=cur_sup.get("phone", ""))
-                u_bank = st.text_area("Bank Details", value=cur_sup.get("bank_details", ""))
-                u_color = st.color_picker("Corporate Color", value=cur_sup.get("brand_color", "#1E293B"))
-                u_logo = st.file_uploader("Upload New Logo", type=["png", "jpg", "jpeg"])
-
-                if st.form_submit_button("Save Profile Setup"):
-                    cur_sup["phone"] = u_phone
-                    cur_sup["bank_details"] = u_bank
-                    cur_sup["brand_color"] = u_color
-                    if u_logo is not None:
-                        cur_sup["logo_url"] = process_image_upload(u_logo, cur_sup.get("logo_url"))
-                    save_data(db)
-                    st.success("Vendor profile updated!")
-                    st.rerun()
-
-        # VERIFY CUSTOMER POPS
-        with v_tab3:
-            st.markdown("#### Verify Direct Vendor Invoices & Proofs of Payment")
-            my_invoices = [i for i in db.get("vendor_invoices", []) if i.get("supporter_id") == cur_sup.get("supporter_id") and i.get("status") == "Pending POP"]
-
-            if not my_invoices:
-                st.success("No pending supplier POPs awaiting verification.")
-            else:
-                for inv in my_invoices:
-                    st.write(f"**Vendor Invoice #{inv.get('vendor_invoice_id')}** — Client: {inv.get('customer_name')}")
-                    st.write(f"**Venue:** {inv.get('venue_name')} | **Event Date:** {inv.get('event_date')} | **Total:** BWP {inv.get('total_amount'):,.2f}")
-                    st.write(f"**Client Contact:** {inv.get('customer_phone')} ({inv.get('customer_email')})")
-
-                    with st.form(f"verify_vendor_inv_{inv.get('vendor_invoice_id')}"):
-                        pop_txn = st.text_input("Enter WhatsApp Transaction / POP Reference*")
-                        if st.form_submit_button("✅ Verify Vendor POP & Approve Order"):
-                            if pop_txn:
-                                inv["status"] = "PAID & VERIFIED"
-                                inv["pop_reference"] = pop_txn
+                        if st.form_submit_button("Add Package Offering to Catalog", type="primary"):
+                            if i_name:
+                                photo_url = process_image_upload(i_photo, SPACE_PRESETS[1])
+                                cur_sup.setdefault("quotation_templates", []).append({
+                                    "item_name": i_name,
+                                    "description": i_desc,
+                                    "unit_type": i_type,
+                                    "unit_price": i_price,
+                                    "image_url": photo_url
+                                })
                                 save_data(db)
-                                st.success(f"Invoice {inv.get('vendor_invoice_id')} marked as PAID!")
+                                st.success(f"Added service package: '{i_name}'")
                                 st.rerun()
                             else:
-                                st.error("Please enter the POP reference number.")
-                    st.divider()
+                                st.error("Please enter a service item name.")
 
-        # VENDOR FINANCIAL REPORTING
-        with v_tab4:
-            st.markdown("#### 📊 Vendor Earnings Statements & Period Filtering")
+                st.divider()
+                st.markdown("#### Current Service Offering Catalog")
+                templates = cur_sup.get("quotation_templates", [])
+                
+                if not templates:
+                    st.info("No service packages or item rates configured yet. Use the form above to add what you provide.")
+                else:
+                    for idx, it in enumerate(templates):
+                        with st.container():
+                            col_t1, col_t2, col_t3 = st.columns([1, 3, 1])
+                            with col_t1:
+                                if it.get("image_url"):
+                                    st.image(it.get("image_url"), use_container_width=True)
+                            with col_t2:
+                                st.markdown(f"### {it.get('item_name')}")
+                                st.markdown(f"**Rate:** BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})")
+                                if it.get("description"):
+                                    st.write(it.get("description"))
+                            with col_t3:
+                                if st.button("Delete Item", key=f"del_t_{idx}"):
+                                    templates.pop(idx)
+                                    save_data(db)
+                                    st.success("Item removed.")
+                                    st.rerun()
+                            st.divider()
 
-            v_c1, v_c2 = st.columns(2)
-            v_start = v_c1.date_input("Start Date", datetime.date(2026, 1, 1), key="v_start")
-            v_end = v_c2.date_input("End Date", datetime.date.today(), key="v_end")
+            # BRANDING & PAYMENTS
+            with v_tab2:
+                st.markdown("#### Update Profile & Payment Details")
+                with st.form("edit_vendor_profile"):
+                    u_phone = st.text_input("WhatsApp Number for POPs", value=cur_sup.get("phone", ""))
+                    u_bank = st.text_area("Bank Details & Instructions", value=cur_sup.get("bank_details", ""))
+                    u_color = st.color_picker("Corporate Color", value=cur_sup.get("brand_color", "#1E293B"))
+                    u_logo = st.file_uploader("Upload New Logo", type=["png", "jpg", "jpeg"])
 
-            all_v_invs = [i for i in db.get("vendor_invoices", []) if i.get("supporter_id") == cur_sup.get("supporter_id")]
+                    if st.form_submit_button("Save Profile Setup"):
+                        cur_sup["phone"] = u_phone
+                        cur_sup["bank_details"] = u_bank
+                        cur_sup["brand_color"] = u_color
+                        if u_logo is not None:
+                            cur_sup["logo_url"] = process_image_upload(u_logo, cur_sup.get("logo_url"))
+                        save_data(db)
+                        st.success("Vendor profile updated!")
+                        st.rerun()
 
-            filtered_v_invs = [
-                i for i in all_v_invs
-                if v_start <= datetime.datetime.strptime(i.get("created_at", str(datetime.date.today())), "%Y-%m-%d").date() <= v_end
-            ]
+            # VERIFY CUSTOMER POPS
+            with v_tab3:
+                st.markdown("#### Verify Direct Vendor Invoices & Proofs of Payment")
+                my_invoices = [i for i in db.get("vendor_invoices", []) if i.get("supporter_id") == cur_sup.get("supporter_id") and i.get("status") == "Pending POP"]
 
-            paid_tot = sum(i.get("total_amount", 0) for i in filtered_v_invs if i.get("status") == "PAID & VERIFIED")
-            pending_tot = sum(i.get("total_amount", 0) for i in filtered_v_invs if i.get("status") == "Pending POP")
+                if not my_invoices:
+                    st.success("No pending supplier POPs awaiting verification.")
+                else:
+                    for inv in my_invoices:
+                        st.write(f"**Vendor Invoice #{inv.get('vendor_invoice_id')}** — Client: {inv.get('customer_name')}")
+                        st.write(f"**Venue:** {inv.get('venue_name')} | **Event Date:** {inv.get('event_date')} | **Total:** BWP {inv.get('total_amount'):,.2f}")
+                        st.write(f"**Client Contact:** {inv.get('customer_phone')} ({inv.get('customer_email')})")
 
-            vm1, vm2, vm3 = st.columns(3)
-            vm1.metric("Total Quotations Issued", len(filtered_v_invs))
-            vm2.metric("Confirmed Payments", f"BWP {paid_tot:,.2f}")
-            vm3.metric("Outstanding Invoices", f"BWP {pending_tot:,.2f}")
+                        with st.form(f"verify_vendor_inv_{inv.get('vendor_invoice_id')}"):
+                            pop_txn = st.text_input("Enter WhatsApp Transaction / POP Reference*")
+                            if st.form_submit_button("✅ Verify Vendor POP & Approve Order"):
+                                if pop_txn:
+                                    inv["status"] = "PAID & VERIFIED"
+                                    inv["pop_reference"] = pop_txn
+                                    save_data(db)
+                                    st.success(f"Invoice {inv.get('vendor_invoice_id')} marked as PAID!")
+                                    st.rerun()
+                                else:
+                                    st.error("Please enter the POP reference number.")
+                        st.divider()
 
-            st.divider()
-            st.markdown("##### Vendor Invoices Breakdown")
-            if filtered_v_invs:
-                v_report = []
-                for i in filtered_v_invs:
-                    v_report.append({
-                        "Vendor Inv ID": i.get("vendor_invoice_id"),
-                        "Master Booking ID": i.get("parent_booking_id"),
-                        "Date Created": i.get("created_at"),
-                        "Client": i.get("customer_name"),
-                        "Venue Location": i.get("venue_name"),
-                        "Event Date": i.get("event_date"),
-                        "Total (BWP)": f"{i.get('total_amount'):,.2f}",
-                        "Status": i.get("status"),
-                        "POP Ref": i.get("pop_reference", "N/A")
-                    })
-                st.dataframe(v_report, use_container_width=True)
-            else:
-                st.info("No vendor invoice activity recorded in this date range.")
+            # VENDOR FINANCIAL REPORTING
+            with v_tab4:
+                st.markdown("#### 📊 Vendor Earnings Statements & Period Filtering")
+
+                v_c1, v_c2 = st.columns(2)
+                v_start = v_c1.date_input("Start Date", datetime.date(2026, 1, 1), key="v_start")
+                v_end = v_c2.date_input("End Date", datetime.date.today(), key="v_end")
+
+                all_v_invs = [i for i in db.get("vendor_invoices", []) if i.get("supporter_id") == cur_sup.get("supporter_id")]
+
+                filtered_v_invs = [
+                    i for i in all_v_invs
+                    if v_start <= datetime.datetime.strptime(i.get("created_at", str(datetime.date.today())), "%Y-%m-%d").date() <= v_end
+                ]
+
+                paid_tot = sum(i.get("total_amount", 0) for i in filtered_v_invs if i.get("status") == "PAID & VERIFIED")
+                pending_tot = sum(i.get("total_amount", 0) for i in filtered_v_invs if i.get("status") == "Pending POP")
+
+                vm1, vm2, vm3 = st.columns(3)
+                vm1.metric("Total Quotations Issued", len(filtered_v_invs))
+                vm2.metric("Confirmed Payments", f"BWP {paid_tot:,.2f}")
+                vm3.metric("Outstanding Invoices", f"BWP {pending_tot:,.2f}")
+
+                st.divider()
+                st.markdown("##### Vendor Invoices Breakdown")
+                if filtered_v_invs:
+                    v_report = []
+                    for i in filtered_v_invs:
+                        v_report.append({
+                            "Vendor Inv ID": i.get("vendor_invoice_id"),
+                            "Master Booking ID": i.get("parent_booking_id"),
+                            "Date Created": i.get("created_at"),
+                            "Client": i.get("customer_name"),
+                            "Venue Location": i.get("venue_name"),
+                            "Event Date": i.get("event_date"),
+                            "Total (BWP)": f"{i.get('total_amount'):,.2f}",
+                            "Status": i.get("status"),
+                            "POP Ref": i.get("pop_reference", "N/A")
+                        })
+                    st.dataframe(v_report, use_container_width=True)
+                else:
+                    st.info("No vendor invoice activity recorded in this date range.")
 
 # ---------------------------------------------------------
 # 7. MODULE 4: TICKET SCANNER & GATE ACCESS
