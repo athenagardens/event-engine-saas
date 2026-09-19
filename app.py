@@ -18,7 +18,7 @@ import qrcode
 from PIL import Image
 
 # ---------------------------------------------------------
-# 1. DATABASE & STORAGE ENGINE (CLOUD-READY SQL)
+# 1. DATABASE ENGINE (WITH SOFT-DELETE SUPPORT)
 # ---------------------------------------------------------
 DB_FILE = "enterprise_platform.db"
 
@@ -38,9 +38,10 @@ def init_db():
         logo_url TEXT, flyer_image_url TEXT, approved_supporter_ids TEXT
     )''')
     
-    # Sub-Spaces
+    # Sub-Spaces (Soft delete supported via is_active)
     c.execute('''CREATE TABLE IF NOT EXISTS spaces (
-        space_id INTEGER PRIMARY KEY AUTOINCREMENT, venue_id TEXT, name TEXT, capacity INTEGER, daily_rate REAL, image_url TEXT
+        space_id INTEGER PRIMARY KEY AUTOINCREMENT, venue_id TEXT, name TEXT, capacity INTEGER, 
+        daily_rate REAL, image_url TEXT, is_active INTEGER DEFAULT 1
     )''')
     
     # Supporters / Vendors
@@ -49,10 +50,10 @@ def init_db():
         email TEXT, phone TEXT, bank_details TEXT, brand_color TEXT, logo_url TEXT
     )''')
     
-    # Vendor Package Templates
+    # Vendor Package Templates (Soft delete supported via is_active)
     c.execute('''CREATE TABLE IF NOT EXISTS vendor_templates (
         template_id INTEGER PRIMARY KEY AUTOINCREMENT, supporter_id TEXT, item_name TEXT, description TEXT,
-        unit_type TEXT, unit_price REAL, image_url TEXT
+        unit_type TEXT, unit_price REAL, image_url TEXT, is_active INTEGER DEFAULT 1
     )''')
     
     # Venue Bookings
@@ -79,7 +80,7 @@ def init_db():
     # Events
     c.execute('''CREATE TABLE IF NOT EXISTS events (
         event_id TEXT PRIMARY KEY, venue_id TEXT, venue_name TEXT, space_name TEXT, title TEXT, date TEXT,
-        price REAL, description TEXT, flyer_url TEXT
+        price REAL, description TEXT, flyer_url TEXT, is_active INTEGER DEFAULT 1
     )''')
     
     conn.commit()
@@ -88,13 +89,12 @@ def init_db():
 init_db()
 
 def get_db_connection():
-    # Replace DB_FILE string with Supabase/PostgreSQL URI when deploying to production
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
 # ---------------------------------------------------------
-# 2. LIGHTWEIGHT IMAGE & IN-MEMORY PDF ENGINE
+# 2. UTILITIES: IMAGES, PDF, & QR GENERATION
 # ---------------------------------------------------------
 DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150"
 SPACE_PRESETS = ["https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=400"]
@@ -103,7 +103,6 @@ def hash_pw(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=600):
-    """Compresses uploaded images to JPEG max 600px width/height before base64 encoding to minimize DB size."""
     if uploaded_file is not None:
         try:
             img = Image.open(uploaded_file)
@@ -130,7 +129,6 @@ def generate_qr_code_base64(data_string):
     return f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode()}"
 
 def generate_in_memory_pdf_bytes(title_text, inv_id, created_at, entity_name, tax_id, client_name, client_email, items_list, total_amount, bank_details):
-    """Generates PDF directly in RAM using BytesIO. No file saved to server disk."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
@@ -223,6 +221,13 @@ user_role = st.sidebar.radio(
     ]
 )
 
+# FIX 5: SESSION ISOLATION ON PUBLIC/SCANNER NAVIGATION
+if user_role in ["Public Booking Portal", "Gate Access & Mobile Scanner", "Master Platform Control"]:
+    st.session_state["authenticated"] = False
+    st.session_state["user_email"] = None
+    st.session_state["user_role"] = None
+    st.session_state["tenant_id"] = None
+
 st.sidebar.divider()
 if st.session_state["authenticated"]:
     st.sidebar.success(f"Logged in: {st.session_state['user_email']}")
@@ -275,7 +280,7 @@ if user_role == "Public Booking Portal":
                 </div>
             """, unsafe_allow_html=True)
 
-            spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ?", (sel_venue['venue_id'],)).fetchall()
+            spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ? AND is_active = 1", (sel_venue['venue_id'],)).fetchall()
             if not spaces:
                 st.warning("No sub-spaces listed.")
             else:
@@ -308,7 +313,7 @@ if user_role == "Public Booking Portal":
                         supporters = conn.execute(f"SELECT * FROM supporters WHERE supporter_id IN ({placeholders})", approved_ids).fetchall()
                         
                         for sup in supporters:
-                            templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ?", (sup['supporter_id'],)).fetchall()
+                            templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ? AND is_active = 1", (sup['supporter_id'],)).fetchall()
                             if templates:
                                 with st.expander(f"Add Services: {sup['business_name']} ({sup['category']})"):
                                     sup_items = []
@@ -344,6 +349,7 @@ if user_role == "Public Booking Portal":
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending POP / Verification', ?)""",
                                     (b_id, sel_venue['venue_id'], sel_sp_name, c_name, c_email, c_phone, date_str, booking_days, space_cost, c_pay, created_date))
 
+                                vendor_pdf_dict = {}
                                 for s_id, v_data in selected_vendor_orders.items():
                                     v_inv_id = f"VINV-{int(datetime.datetime.now().timestamp())}"
                                     conn.execute("""INSERT INTO vendor_invoices
@@ -351,25 +357,38 @@ if user_role == "Public Booking Portal":
                                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending POP', ?)""",
                                         (v_inv_id, b_id, s_id, sel_venue['name'], c_name, c_email, c_phone, date_str, json.dumps(v_data['items']), v_data['total'], c_pay, created_date))
 
+                                    # Generate Vendor PDF Invoice In-Memory
+                                    v_info = v_data['info']
+                                    v_pdf = generate_in_memory_pdf_bytes(
+                                        f"Vendor Invoice — {v_info['business_name']}",
+                                        v_inv_id, created_date, v_info['business_name'], "TAX-PENDING",
+                                        c_name, c_email, v_data['items'], v_data['total'], v_info['bank_details']
+                                    )
+                                    vendor_pdf_dict[v_info['business_name']] = (v_inv_id, v_pdf)
+
                                 conn.commit()
                                 st.success(f"Reservation Request #{b_id} Created Successfully!")
                                 
-                                # Dynamic In-Memory PDF Download Button (Generated on-the-fly in RAM)
-                                pdf_bytes = generate_in_memory_pdf_bytes(
+                                # FIX 1: Venue PDF Download
+                                venue_pdf_bytes = generate_in_memory_pdf_bytes(
                                     f"Venue Tax Invoice — {sel_venue['name']}",
                                     b_id, created_date, sel_venue['name'], sel_venue['tax_id'],
                                     c_name, c_email,
                                     [{"item_name": f"Venue Hire ({sel_sp_name})", "qty": booking_days, "unit_price": sel_space['daily_rate'], "subtotal": space_cost}],
                                     space_cost, sel_venue['bank_details']
                                 )
-                                st.download_button("📄 Download PDF Invoice (0 KB Disk Space)", pdf_bytes, file_name=f"Invoice_{b_id}.pdf", mime="application/pdf")
+                                st.download_button("📄 Download Venue PDF Invoice", venue_pdf_bytes, file_name=f"Venue_Invoice_{b_id}.pdf", mime="application/pdf")
+
+                                # FIX 1: Vendor PDFs Download Loop
+                                for v_biz, (v_inv_id, v_pdf_data) in vendor_pdf_dict.items():
+                                    st.download_button(f"📄 Download Vendor Invoice ({v_biz})", v_pdf_data, file_name=f"Vendor_Invoice_{v_inv_id}.pdf", mime="application/pdf")
                             else:
                                 st.error("Please fill in required fields.")
         conn.close()
 
     with tab_tickets:
         conn = get_db_connection()
-        events = conn.execute("SELECT * FROM events").fetchall()
+        events = conn.execute("SELECT * FROM events WHERE is_active = 1").fetchall()
         if not events:
             st.info("No upcoming ticketed events available.")
         else:
@@ -396,9 +415,9 @@ if user_role == "Public Booking Portal":
                                 (tkt_id, sec_hash, ev['event_id'], ev['title'], v['venue_id'] if v else "", ev['venue_name'], v['logo_url'] if v else DEFAULT_LOGO, t_buyer, t_email, t_qty, t_qty*ev['price'], t_pay))
                             conn.commit()
                             
-                            st.warning("Ticket Reserved!")
+                            st.warning("Ticket Pass Requested! Awaiting Venue POP Verification.")
                             qr_img_str = generate_qr_code_base64(sec_hash)
-                            st.image(qr_img_str, caption=f"Ticket QR Pass ({sec_hash})", width=160)
+                            st.image(qr_img_str, caption=f"Pending Ticket Pass ({sec_hash})", width=160)
                         else:
                             st.error("Provide buyer details.")
         conn.close()
@@ -433,6 +452,7 @@ elif user_role == "Facility Owner Console":
                         st.error("Invalid Credentials.")
 
         with reg_tab:
+            # FIX 2: MASKED PASSWORD FIELDS
             with st.form("reg_facility_auth"):
                 f_name = st.text_input("Facility Name*")
                 f_type = st.selectbox("Type", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"])
@@ -471,7 +491,9 @@ elif user_role == "Facility Owner Console":
                 </div>
             """, unsafe_allow_html=True)
 
-            tab_spaces, tab_vendors, tab_verify, tab_edit = st.tabs(["Sub-Spaces", "Approved Vendors", "Verify POPs", "Edit Profile"])
+            tab_spaces, tab_vendors, tab_verify_bks, tab_verify_tkts, tab_edit = st.tabs([
+                "Sub-Spaces", "Approved Vendors", "Verify Booking POPs", "🎟️ Verify Ticket POPs", "Edit Profile"
+            ])
 
             with tab_spaces:
                 with st.form("add_space_form"):
@@ -483,19 +505,20 @@ elif user_role == "Facility Owner Console":
                     if st.form_submit_button("Add Space"):
                         if s_name:
                             img_url = process_compressed_image_upload(s_img, SPACE_PRESETS[0])
-                            conn.execute("INSERT INTO spaces (venue_id, name, capacity, daily_rate, image_url) VALUES (?, ?, ?, ?, ?)",
+                            conn.execute("INSERT INTO spaces (venue_id, name, capacity, daily_rate, image_url, is_active) VALUES (?, ?, ?, ?, ?, 1)",
                                          (cur_v['venue_id'], s_name, s_cap, s_rate, img_url))
                             conn.commit()
                             st.success("Sub-Space Saved!")
                             st.rerun()
 
                 st.divider()
-                spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ?", (cur_v['venue_id'],)).fetchall()
+                spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ? AND is_active = 1", (cur_v['venue_id'],)).fetchall()
                 for sp in spaces:
                     col_sp1, col_sp2 = st.columns([4, 1])
                     col_sp1.write(f"• **{sp['name']}** — Cap: {sp['capacity']} | BWP {sp['daily_rate']:,.2f}/day")
-                    if col_sp2.button("🗑️ Delete", key=f"del_sp_{sp['space_id']}"):
-                        conn.execute("DELETE FROM spaces WHERE space_id = ?", (sp['space_id'],))
+                    # FIX 4: SOFT DELETE
+                    if col_sp2.button("🗑️ Soft Delete", key=f"del_sp_{sp['space_id']}"):
+                        conn.execute("UPDATE spaces SET is_active = 0 WHERE space_id = ?", (sp['space_id'],))
                         conn.commit()
                         st.rerun()
 
@@ -516,20 +539,37 @@ elif user_role == "Facility Owner Console":
                             st.success("Approved Network Updated!")
                             st.rerun()
 
-            with tab_verify:
+            with tab_verify_bks:
                 pending_bks = conn.execute("SELECT * FROM bookings WHERE venue_id = ? AND status = 'Pending POP / Verification'", (cur_v['venue_id'],)).fetchall()
                 if not pending_bks:
-                    st.success("No pending POPs.")
+                    st.success("No pending booking POPs.")
                 else:
                     for bk in pending_bks:
                         st.write(f"**Booking #{bk['booking_id']}** — Client: {bk['customer_name']} | BWP {bk['venue_cost']:,.2f}")
                         with st.form(f"verify_bk_{bk['booking_id']}"):
                             ref = st.text_input("Enter WhatsApp Ref")
-                            if st.form_submit_button("✅ Verify"):
+                            if st.form_submit_button("✅ Verify Booking"):
                                 if ref:
                                     conn.execute("UPDATE bookings SET status = 'Confirmed / Paid', pop_reference = ? WHERE booking_id = ?", (ref, bk['booking_id']))
                                     conn.commit()
                                     st.success("Booking Verified!")
+                                    st.rerun()
+
+            # FIX 3: TICKET POP VERIFICATION WORKFLOW
+            with tab_verify_tkts:
+                pending_tkts = conn.execute("SELECT * FROM tickets WHERE venue_id = ? AND status LIKE 'Pending%'", (cur_v['venue_id'],)).fetchall()
+                if not pending_tkts:
+                    st.success("No pending ticket passes.")
+                else:
+                    for tkt in pending_tkts:
+                        st.write(f"**Ticket #{tkt['ticket_id']}** ({tkt['event_title']}) — Buyer: {tkt['buyer']} | BWP {tkt['total_paid']:,.2f}")
+                        with st.form(f"verify_tkt_{tkt['ticket_id']}"):
+                            ref = st.text_input("Enter WhatsApp Payment Ref")
+                            if st.form_submit_button("✅ Verify & Activate Gate Ticket"):
+                                if ref:
+                                    conn.execute("UPDATE tickets SET status = 'VALID', pop_reference = ? WHERE ticket_id = ?", (ref, tkt['ticket_id']))
+                                    conn.commit()
+                                    st.success(f"Ticket #{tkt['ticket_id']} set to VALID!")
                                     st.rerun()
 
             with tab_edit:
@@ -581,6 +621,7 @@ elif user_role == "Facility Supporter Console":
                         st.error("Invalid Credentials.")
 
         with reg_tab:
+            # FIX 2: MASKED PASSWORD FIELDS
             with st.form("reg_supporter_auth"):
                 s_name = st.text_input("Business Name*")
                 s_cat = st.selectbox("Category", ["Catering & Cutlery", "Stage & Decor", "Sound & AV", "Florist", "Security"])
@@ -632,20 +673,21 @@ elif user_role == "Facility Supporter Console":
                         if i_name:
                             img_url = process_compressed_image_upload(i_photo, SPACE_PRESETS[0])
                             conn.execute("""INSERT INTO vendor_templates 
-                                (supporter_id, item_name, description, unit_type, unit_price, image_url)
-                                VALUES (?, ?, ?, ?, ?, ?)""",
+                                (supporter_id, item_name, description, unit_type, unit_price, image_url, is_active)
+                                VALUES (?, ?, ?, ?, ?, ?, 1)""",
                                 (cur_sup['supporter_id'], i_name, i_desc, i_type, i_price, img_url))
                             conn.commit()
                             st.success("Offering Added!")
                             st.rerun()
 
                 st.divider()
-                templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ?", (cur_sup['supporter_id'],)).fetchall()
+                templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ? AND is_active = 1", (cur_sup['supporter_id'],)).fetchall()
                 for t in templates:
                     col_t1, col_t2 = st.columns([4, 1])
                     col_t1.write(f"• **{t['item_name']}** — BWP {t['unit_price']:,.2f} / {t['unit_type']}")
-                    if col_t2.button("🗑️ Delete", key=f"del_item_{t['template_id']}"):
-                        conn.execute("DELETE FROM vendor_templates WHERE template_id = ?", (t['template_id'],))
+                    # FIX 4: SOFT DELETE
+                    if col_t2.button("🗑️ Soft Delete", key=f"del_item_{t['template_id']}"):
+                        conn.execute("UPDATE vendor_templates SET is_active = 0 WHERE template_id = ?", (t['template_id'],))
                         conn.commit()
                         st.rerun()
 
@@ -704,7 +746,7 @@ elif user_role == "Gate Access & Mobile Scanner":
                     conn.commit()
                     st.success(f"✅ ACCESS GRANTED: {tkt['buyer']} ({tkt['qty']} Person/s) — Event: {tkt['event_title']}")
                 elif 'Pending' in tkt['status']:
-                    st.warning("⚠️ UNVERIFIED TICKET: Payment POP has not been confirmed.")
+                    st.warning("⚠️ UNVERIFIED TICKET: Payment POP has not been confirmed by facility manager.")
                 else:
                     st.error("❌ INVALID: Pass already redeemed.")
             else:
