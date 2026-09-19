@@ -181,16 +181,46 @@ def generate_in_memory_pdf_bytes(title_text, inv_id, created_at, entity_name, ta
     return buffer.getvalue()
 
 # ---------------------------------------------------------
-# 3. PAGE SETUP & STYLES
+# 3. PAGE SETUP & ENTERPRISE STYLES
 # ---------------------------------------------------------
 st.set_page_config(page_title="Enterprise Venue & Event Operating Platform", page_icon="🏢", layout="wide")
 
 st.markdown("""
     <style>
-        .main { background-color: #F8FAFC; }
-        .invoice-box { background: #FFFFFF; padding: 1.5rem; border-radius: 8px; border: 1px solid #CBD5E1; margin-bottom: 1.5rem; }
-        .profile-card { padding: 1.2rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1rem; text-align: center; }
-        .logo-img { max-height: 50px; max-width: 150px; object-fit: contain; }
+        /* Corporate Executive Color System */
+        .main { background-color: #F1F5F9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        /* Elevated Enterprise Card Styling */
+        .enterprise-card {
+            background-color: #FFFFFF;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            margin-bottom: 1.5rem;
+        }
+        
+        .profile-card {
+            padding: 1.5rem;
+            border-radius: 8px;
+            color: #FFFFFF !important;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .logo-img { max-height: 55px; max-width: 160px; object-fit: contain; }
+        
+        /* Corporate Status Badges */
+        .status-pill-pending {
+            background-color: #FEF3C7; color: #92400E; padding: 4px 10px;
+            border-radius: 12px; font-weight: 600; font-size: 0.85rem;
+        }
+        .status-pill-verified {
+            background-color: #D1FAE5; color: #065F46; padding: 4px 10px;
+            border-radius: 12px; font-weight: 600; font-size: 0.85rem;
+        }
+        
         @media print {
             [data-testid="stSidebar"], button, header { display: none !important; }
         }
@@ -207,7 +237,7 @@ if "authenticated" not in st.session_state:
 # 4. SIDEBAR NAVIGATION
 # ---------------------------------------------------------
 st.sidebar.markdown("<h2 style='text-align: center;'>🏢 ENTERPRISE GATEWAY</h2>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='text-align: center;'><b>SaaS Venue & Vendor Infrastructure</b></p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='text-align: center; color: #64748B;'><b>SaaS Venue & Vendor Infrastructure</b></p>", unsafe_allow_html=True)
 st.sidebar.divider()
 
 user_role = st.sidebar.radio(
@@ -252,7 +282,7 @@ with st.sidebar.expander("System Utilities"):
 # ---------------------------------------------------------
 if user_role == "Enterprise Marketplace & Event Hub":
     st.markdown("<h1 style='text-align: center;'>Enterprise Marketplace & Event Hub</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'><b>Reserve commercial facilities, select preferred vendor add-ons, and download official invoices.</b></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #475569;'><b>Reserve commercial facilities, select preferred vendor add-ons, and download official invoices.</b></p>", unsafe_allow_html=True)
     st.divider()
 
     tab_book, tab_tickets = st.tabs(["🏛️ Commercial Venue Reservations", "🎟️ Event Box Office & Ticketing"])
@@ -270,14 +300,14 @@ if user_role == "Enterprise Marketplace & Event Hub":
             col1, col2 = st.columns([1, 2])
             col1.image(sel_venue['flyer_image_url'] or SPACE_PRESETS[0], use_container_width=True)
             col2.markdown(f"""
-                <div style="background:{sel_venue['brand_color']}; padding:1rem; border-radius:8px; color:white; text-align:center;">
+                <div style="background:{sel_venue['brand_color']}; padding:1.25rem; border-radius:8px; color:white; text-align:center;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h2 style="margin:0;">{sel_venue['name']}</h2>
-                        <img src="{sel_venue['logo_url'] or DEFAULT_LOGO}" class="logo-img" style="background:white; padding:2px; border-radius:4px;">
+                        <h2 style="margin:0; font-size: 1.5rem;">{sel_venue['name']}</h2>
+                        <img src="{sel_venue['logo_url'] or DEFAULT_LOGO}" class="logo-img" style="background:white; padding:3px; border-radius:4px;">
                     </div>
-                    <hr style="margin: 0.5rem 0;">
-                    <p><b>📍 Location:</b> {sel_venue['address']} | <b>👥 Licensed Capacity:</b> {sel_venue['max_capacity']:,}<br>
-                    <b>💬 WhatsApp POP Verification Line:</b> {sel_venue['whatsapp_no']}</p>
+                    <hr style="margin: 0.75rem 0; opacity: 0.3;">
+                    <p style="margin:0;"><b>📍 Location:</b> {sel_venue['address']} | <b>👥 Licensed Capacity:</b> {sel_venue['max_capacity']:,}<br>
+                    <b>💬 WhatsApp Verification Line:</b> {sel_venue['whatsapp_no']}</p>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -722,7 +752,7 @@ elif user_role == "Vendor Portal & Service Fulfillment":
 # ---------------------------------------------------------
 elif user_role == "Access Control & Verification Suite":
     st.markdown("<h1 style='text-align: center;'>Access Control & Mobile Verification Suite</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'><b>Point optical device camera at attendee QR passes or input verification hashes.</b></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #475569;'><b>Point optical device camera at attendee QR passes or input verification hashes.</b></p>", unsafe_allow_html=True)
     st.divider()
 
     conn = get_db_connection()
@@ -751,7 +781,7 @@ elif user_role == "Access Control & Verification Suite":
 # ---------------------------------------------------------
 elif user_role == "Executive Master Ledger & Audit Suite":
     st.markdown("<h1 style='text-align: center;'>Executive Master Ledger & Audit Suite</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'><b>Global platform analytics, system logs, and entity ledgers.</b></p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #475569;'><b>Global platform analytics, system logs, and entity ledgers.</b></p>", unsafe_allow_html=True)
     st.divider()
 
     # SECURE MASTER ADMIN AUTHENTICATION GATE
