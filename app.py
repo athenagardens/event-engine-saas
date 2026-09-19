@@ -3,6 +3,7 @@ import json
 import os
 import datetime
 import hashlib
+import base64
 
 # ---------------------------------------------------------
 # 1. DATABASE & STORAGE MANAGEMENT
@@ -61,14 +62,22 @@ def inject_enterprise_styles():
                 background-color: #059669; color: #FFFFFF; padding: 0.25rem 0.6rem;
                 border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
             }
-            .share-link-box {
-                background-color: #EFF6FF; border: 1px dashed #2563EB;
-                padding: 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;
-            }
         </style>
     """, unsafe_allow_html=True)
 
 inject_enterprise_styles()
+
+# Helper for processing custom image uploads to base64 data URLs
+def process_image_upload(uploaded_file, fallback_url):
+    if uploaded_file is not None:
+        try:
+            bytes_data = uploaded_file.getvalue()
+            b64_str = base64.b64encode(bytes_data).decode()
+            mime_type = uploaded_file.type if uploaded_file.type else "image/png"
+            return f"data:{mime_type};base64,{b64_str}"
+        except Exception:
+            return fallback_url
+    return fallback_url
 
 # ---------------------------------------------------------
 # 3. SIDEBAR NAVIGATION & UTILITIES
@@ -165,10 +174,12 @@ if user_role == "Public Portal (Bookings & Ticketing)":
 
                 space_total = sel_space.get("daily_rate", 0) * booking_days
 
-                # Check for Date Locking Conflicts
+                # DATE LOCKING CONFLICT CHECK (Includes Paid Customer Bookings + Facility Owner Scheduled Events)
                 existing_bookings = db.get("bookings", [])
+                existing_events = db.get("events", [])
                 date_str = str(booking_date)
-                is_locked = any(
+                
+                is_customer_locked = any(
                     b.get("venue_id") == sel_venue.get("venue_id") and 
                     b.get("space_name") == sel_sp_name and 
                     b.get("booking_date") == date_str and 
@@ -176,10 +187,17 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                     for b in existing_bookings
                 )
 
-                if is_locked:
-                    st.error(f"DATE LOCKED: '{sel_sp_name}' is already confirmed for {date_str}. Please choose another date or space.")
+                is_facility_event_locked = any(
+                    e.get("venue_id") == sel_venue.get("venue_id") and
+                    (e.get("space_name") == sel_sp_name or e.get("space_name") == "All Spaces / Full Venue") and
+                    e.get("date") == date_str
+                    for e in existing_events
+                )
+
+                if is_customer_locked or is_facility_event_locked:
+                    st.error(f"❌ DATE LOCKED: '{sel_sp_name}' is ALREADY RESERVED/SCHEDULED on {date_str}. Double booking prevented. Please select another date or space.")
                 else:
-                    st.success(f"DATE AVAILABLE: '{sel_sp_name}' is open for booking on {date_str}.")
+                    st.success(f"✅ DATE AVAILABLE: '{sel_sp_name}' is open for booking on {date_str}.")
 
                     st.divider()
                     st.markdown("### 3. Add Service Provider Packages (Supporters)")
@@ -312,7 +330,7 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                         st.image(ev.get("flyer_url", "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=800"), use_container_width=True)
                     with col_e2:
                         st.markdown(f"### {ev.get('title')}")
-                        st.write(f"<b>Venue:</b> {ev.get('venue_name')} | <b>Date:</b> {ev.get('date')}", unsafe_allow_html=True)
+                        st.write(f"<b>Venue:</b> {ev.get('venue_name')} | <b>Space:</b> {ev.get('space_name', 'Full Venue')} | <b>Date:</b> {ev.get('date')}", unsafe_allow_html=True)
                         st.write(f"{ev.get('description')}")
                         st.markdown(f"<b>Admission Price:</b> BWP {ev.get('price', 0):,.2f}", unsafe_allow_html=True)
 
@@ -363,11 +381,11 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                     st.divider()
 
 # ---------------------------------------------------------
-# 5. MODULE 2: FACILITY OWNER CONSOLE (FLYER BUILDER & DEEPLINKS)
+# 5. MODULE 2: FACILITY OWNER CONSOLE (FLYER BUILDER, EDIT/DELETE & LOCKING)
 # ---------------------------------------------------------
 elif user_role == "Facility Owner Console":
     st.title("Facility Owner Console")
-    st.caption("Manage facility sub-spaces, configure corporate branding, publish marketing flyers with shareable media links, and audit locked bookings.")
+    st.caption("Manage facility sub-spaces, configure corporate branding, publish marketing flyers with custom images, and edit/delete mistaken submissions.")
     st.divider()
 
     venues = db.get("venues", [])
@@ -429,32 +447,59 @@ elif user_role == "Facility Owner Console":
         """, unsafe_allow_html=True)
 
         t_spaces, t_brand, t_flyers, t_bookings = st.tabs([
-            "Configured Sub-Spaces", 
+            "Configured Sub-Spaces (Edit/Delete)", 
             "Brand Color Settings",
-            "Flyer Builder & Social Share Links", 
+            "Flyer Builder & Scheduled Events (Lock Dates)", 
             "Locked Date Bookings & Invoices"
         ])
 
+        # SUB-SPACES WITH EDIT AND DELETE
         with t_spaces:
-            st.markdown("#### Manage Sub-Spaces")
+            st.markdown("#### Add / Edit / Delete Sub-Spaces")
             with st.form("add_sp"):
                 c1, c2, c3 = st.columns(3)
                 s_name = c1.text_input("Space Name (e.g. Executive Ballroom)")
                 s_cap = c2.number_input("Capacity", value=250)
                 s_rate = c3.number_input("Daily Hire Rate (BWP)", value=3500.0)
                 if st.form_submit_button("Add Hire Space"):
-                    cur_v.setdefault("spaces", []).append({"name": s_name, "capacity": s_cap, "daily_rate": s_rate})
-                    save_data(db)
-                    st.success("Space added!")
-                    st.rerun()
+                    if s_name:
+                        cur_v.setdefault("spaces", []).append({"name": s_name, "capacity": s_cap, "daily_rate": s_rate})
+                        save_data(db)
+                        st.success("Space added!")
+                        st.rerun()
 
             st.divider()
-            for sp in cur_v.get("spaces", []):
-                st.write(f"• **{sp.get('name')}** | Capacity: {sp.get('capacity')} guests | BWP {sp.get('daily_rate'):,.2f}/day")
+            st.markdown("##### Existing Sub-Spaces")
+            spaces_list = cur_v.get("spaces", [])
+            if not spaces_list:
+                st.info("No sub-spaces configured.")
+            else:
+                for idx, sp in enumerate(spaces_list):
+                    with st.expander(f"📍 {sp.get('name')} — BWP {sp.get('daily_rate'):,.2f}/day (Cap: {sp.get('capacity')})"):
+                        with st.form(f"edit_sp_form_{idx}"):
+                            ec1, ec2, ec3 = st.columns(3)
+                            es_name = ec1.text_input("Space Name", value=sp.get('name'))
+                            es_cap = ec2.number_input("Capacity", value=int(sp.get('capacity', 0)))
+                            es_rate = ec3.number_input("Daily Rate (BWP)", value=float(sp.get('daily_rate', 0.0)))
+                            
+                            col_btn1, col_btn2 = st.columns(2)
+                            save_edit = col_btn1.form_submit_button("💾 Save Changes")
+                            delete_sp = col_btn2.form_submit_button("🗑️ Delete Space")
+
+                            if save_edit:
+                                spaces_list[idx] = {"name": es_name, "capacity": es_cap, "daily_rate": es_rate}
+                                save_data(db)
+                                st.success("Sub-space updated!")
+                                st.rerun()
+                            if delete_sp:
+                                spaces_list.pop(idx)
+                                save_data(db)
+                                st.warning("Sub-space deleted!")
+                                st.rerun()
 
         with t_brand:
             st.markdown("#### Update Corporate Brand Colors")
-            st.caption("These colors will format your quotation invoices, digital receipts, and header cards.")
+            st.caption("These colors format your quotation invoices, digital receipts, and header cards.")
             with st.form("update_brand_form"):
                 col_b1, col_b2 = st.columns(2)
                 new_p = col_b1.color_picker("Primary Corporate Color", value=cur_v.get("brand_color", "#0F172A"))
@@ -467,22 +512,35 @@ elif user_role == "Facility Owner Console":
                     st.success("Brand colors updated!")
                     st.rerun()
 
-        # FLYER BUILDER & SHAREABLE MEDIA LINKS
+        # FLYER BUILDER WITH CUSTOM IMAGE UPLOAD & DATE LOCKING
         with t_flyers:
-            st.markdown("#### Event Publisher & Shareable Flyer Builder")
-            st.caption("Generate event posters with embedded tracking links to post on social media (Facebook, LinkedIn, WhatsApp).")
+            st.markdown("#### 🎨 Custom Flyer Builder & Event Scheduler (Auto-Locks Venue Date)")
+            st.caption("Design flyers with your own custom images or preset templates. Scheduling an event automatically locks the venue space on that date to prevent double bookings.")
             
             with st.form("flyer_builder_form"):
-                e_title = st.text_input("Event Title", placeholder="Annual Executive Business Expo")
-                e_date = st.date_input("Event Date")
-                e_price = st.number_input("Ticket Price (BWP)", value=250.0)
-                e_desc = st.text_area("Event Description / Agenda")
+                e_title = st.text_input("Event Title*", placeholder="Annual Executive Business Expo")
+                
+                # Space selection for event lock
+                v_spaces_names = ["All Spaces / Full Venue"] + [s.get("name") for s in cur_v.get("spaces", [])]
+                e_space = st.selectbox("Reserve/Lock Venue Space for Event*", v_spaces_names)
+                
+                e_date = st.date_input("Scheduled Event Date*")
+                e_price = st.number_input("Ticket Admission Price (BWP)", value=250.0)
+                e_desc = st.text_area("Event Description / Highlights")
 
-                st.markdown("##### Poster Visual Style")
-                flyer_template = st.radio(
-                    "Poster Theme Background",
-                    ["Corporate Gala Poster", "Festival & Concert Poster", "Conference & Expo Poster"]
-                )
+                st.markdown("##### Poster / Flyer Image Source:")
+                img_source = st.radio("Image Source Selection", ["Upload My Own Custom Image File", "Use Custom Image URL", "Choose Preset Graphic Template"])
+
+                uploaded_flyer_file = None
+                custom_img_url = ""
+                flyer_template = "Corporate Gala Poster"
+
+                if img_source == "Upload My Own Custom Image File":
+                    uploaded_flyer_file = st.file_uploader("Upload Poster Image (PNG/JPG)", type=["png", "jpg", "jpeg"])
+                elif img_source == "Use Custom Image URL":
+                    custom_img_url = st.text_input("Image Web Link (URL)", placeholder="https://example.com/my-poster.jpg")
+                else:
+                    flyer_template = st.radio("Preset Templates", ["Corporate Gala Poster", "Festival & Concert Poster", "Conference & Expo Poster"])
 
                 img_map = {
                     "Corporate Gala Poster": "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=800",
@@ -490,45 +548,73 @@ elif user_role == "Facility Owner Console":
                     "Conference & Expo Poster": "https://images.unsplash.com/photo-1511578314322-379afb476865?w=800"
                 }
 
-                if st.form_submit_button("Publish Event & Generate Media Flyer"):
+                if st.form_submit_button("Publish Event, Lock Date & Generate Flyer"):
                     if e_title:
+                        # Determine Final Poster URL
+                        if img_source == "Upload My Own Custom Image File" and uploaded_flyer_file is not None:
+                            final_flyer_url = process_image_upload(uploaded_flyer_file, img_map["Corporate Gala Poster"])
+                        elif img_source == "Use Custom Image URL" and custom_img_url.strip():
+                            final_flyer_url = custom_img_url.strip()
+                        else:
+                            final_flyer_url = img_map.get(flyer_template, img_map["Corporate Gala Poster"])
+
                         ev_id = f"EV-{len(db.get('events', []))+101}"
                         db.setdefault("events", []).append({
                             "event_id": ev_id,
                             "venue_id": cur_v.get("venue_id"),
                             "venue_name": cur_v.get("name"),
+                            "space_name": e_space,
                             "title": e_title,
                             "date": str(e_date),
                             "price": e_price,
                             "description": e_desc,
-                            "flyer_url": img_map[flyer_template]
+                            "flyer_url": final_flyer_url
                         })
                         save_data(db)
-                        st.success(f"Event '{e_title}' published!")
+                        st.success(f"🎉 Event '{e_title}' published! Date {e_date} is now LOCKED for '{e_space}'.")
                         st.rerun()
 
             st.divider()
-            st.markdown("##### Published Event Flyers & Media Sharing Links")
+            st.markdown("##### Published Events & Editable Flyers")
             pub_events = [e for e in db.get("events", []) if e.get("venue_id") == cur_v.get("venue_id")]
-            if pub_events:
-                for ev in pub_events:
-                    with st.container():
+            if not pub_events:
+                st.info("No published events yet.")
+            else:
+                for idx, ev in enumerate(pub_events):
+                    with st.expander(f"📢 {ev.get('title')} ({ev.get('date')}) — Space: {ev.get('space_name', 'Full Venue')}"):
                         fc1, fc2 = st.columns([1, 2])
                         with fc1:
                             st.image(ev.get("flyer_url"), use_container_width=True)
                         with fc2:
-                            st.markdown(f"### {ev.get('title')}")
-                            st.write(f"<b>Date:</b> {ev.get('date')} | <b>Price:</b> BWP {ev.get('price'):,.2f}", unsafe_allow_html=True)
-                            
-                            # Generated Shareable Social Media Deeplinks
+                            with st.form(f"edit_event_form_{idx}"):
+                                ee_title = st.text_input("Title", value=ev.get("title"))
+                                ee_date = st.date_input("Date", value=datetime.datetime.strptime(ev.get("date"), "%Y-%m-%d").date())
+                                ee_price = st.number_input("Ticket Price (BWP)", value=float(ev.get("price", 0)))
+                                ee_desc = st.text_area("Description", value=ev.get("description"))
+                                
+                                e_btn1, e_btn2 = st.columns(2)
+                                save_ev = e_btn1.form_submit_button("💾 Save Changes")
+                                del_ev = e_btn2.form_submit_button("🗑️ Delete Event")
+
+                                if save_ev:
+                                    ev["title"] = ee_title
+                                    ev["date"] = str(ee_date)
+                                    ev["price"] = ee_price
+                                    ev["description"] = ee_desc
+                                    save_data(db)
+                                    st.success("Event updated!")
+                                    st.rerun()
+                                if del_ev:
+                                    db["events"].remove(ev)
+                                    save_data(db)
+                                    st.warning("Event deleted! Date is unlocked.")
+                                    st.rerun()
+
+                            # Social Media Share Link
                             base_url = "https://your-platform-domain.streamlit.app"
                             share_link_venue = f"{base_url}/?venue_id={cur_v.get('venue_id')}"
-                            share_link_event = f"{base_url}/?event_id={ev.get('event_id')}"
-
-                            st.markdown("**Social Media Direct Booking Link (Copy to Share):**")
+                            st.markdown("**Social Media Share Link:**")
                             st.code(share_link_venue, language="text")
-                            st.caption("Posting this link on social media directs users straight to your venue booking console.")
-                    st.divider()
 
         with t_bookings:
             st.markdown("#### Confirmed Date Bookings & Payment Records")
@@ -544,11 +630,11 @@ elif user_role == "Facility Owner Console":
                         st.write(f"**Grand Total Paid:** **BWP {b.get('grand_total'):,.2f}**")
 
 # ---------------------------------------------------------
-# 6. MODULE 3: FACILITY SUPPORTER CONSOLE (VENDORS)
+# 6. MODULE 3: FACILITY SUPPORTER CONSOLE (VENDORS - EDIT/DELETE TEMPLATES)
 # ---------------------------------------------------------
 elif user_role == "Facility Supporter Console (Vendors)":
     st.title("Facility Supporter Console")
-    st.caption("Configure accredited service templates (catering, cutlery, decor, AV, security) and set corporate branding.")
+    st.caption("Configure accredited service templates (catering, cutlery, decor, AV, security) and manage item pricing.")
     st.divider()
 
     supporters = db.get("supporters", [])
@@ -594,14 +680,14 @@ elif user_role == "Facility Supporter Console (Vendors)":
 
     if supporters:
         st.divider()
-        st.markdown("### 2. Configure Industry Quotation Item Templates")
-        st.caption("Pre-configure unit rates (e.g. Cutlery set per head, Floral arrangements, Security guards per shift).")
+        st.markdown("### 2. Configure & Manage Industry Quotation Item Templates")
+        st.caption("Add, edit, or delete item templates (e.g., cutlery per head, stage decor, floral arrangements).")
 
         sel_sup_name = st.selectbox("Select Active Supporter Account:", [s.get("business_name") for s in supporters])
         cur_sup = next(s for s in supporters if s.get("business_name") == sel_sup_name)
 
         with st.form("add_template_item_form"):
-            st.markdown(f"#### Add Item Template to `{cur_sup.get('business_name')}`")
+            st.markdown(f"#### Add New Item Template to `{cur_sup.get('business_name')}`")
             t_col1, t_col2, t_col3 = st.columns(3)
             i_name = t_col1.text_input("Template Item Name", placeholder="e.g. Premium VIP Cutlery & Crockery Set")
             i_type = t_col2.selectbox("Unit Metric Type", ["Per Head / Guest", "Per Day", "Per Item / Set", "Flat Rate Shift"])
@@ -618,13 +704,34 @@ elif user_role == "Facility Supporter Console (Vendors)":
                     st.success(f"Added '{i_name}' to quotation template library!")
                     st.rerun()
 
-        st.markdown("##### Configured Item Templates")
+        st.divider()
+        st.markdown("##### Existing Quotation Item Templates (Edit / Delete)")
         items = cur_sup.get("quotation_templates", [])
-        if items:
-            for it in items:
-                st.write(f"• **{it.get('item_name')}** — BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})")
-        else:
+        if not items:
             st.info("No quotation item templates added yet.")
+        else:
+            for idx, it in enumerate(items):
+                with st.expander(f"🛠️ {it.get('item_name')} — BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})"):
+                    with st.form(f"edit_supporter_item_{idx}"):
+                        ei_col1, ei_col2, ei_col3 = st.columns(3)
+                        ei_name = ei_col1.text_input("Item Name", value=it.get('item_name'))
+                        ei_type = ei_col2.selectbox("Unit Type", ["Per Head / Guest", "Per Day", "Per Item / Set", "Flat Rate Shift"], index=0)
+                        ei_price = ei_col3.number_input("Unit Price (BWP)", value=float(it.get('unit_price', 0.0)))
+
+                        sb_col1, sb_col2 = st.columns(2)
+                        save_sup_item = sb_col1.form_submit_button("💾 Save Item")
+                        del_sup_item = sb_col2.form_submit_button("🗑️ Delete Item")
+
+                        if save_sup_item:
+                            items[idx] = {"item_name": ei_name, "unit_type": ei_type, "unit_price": ei_price}
+                            save_data(db)
+                            st.success("Item template updated!")
+                            st.rerun()
+                        if del_sup_item:
+                            items.pop(idx)
+                            save_data(db)
+                            st.warning("Item template deleted!")
+                            st.rerun()
 
 # ---------------------------------------------------------
 # 7. MODULE 4: TICKET SCANNER & GATE ACCESS VERIFICATION
