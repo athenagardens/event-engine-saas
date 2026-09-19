@@ -3,6 +3,7 @@ import json
 import os
 import urllib.parse
 import io
+import pandas as pd
 from fpdf import FPDF
 
 # --- STYLED INJECTED CSS FOR ENTERPRISE LOOK & FEEL ---
@@ -295,17 +296,33 @@ else:
 
         with tab_events:
             st.subheader("Global Event Inventory")
-            st.json(db["events"])
+            df_events = pd.DataFrame(db["events"])
+            if not df_events.empty:
+                df_events["Total Revenue (BWP)"] = df_events["tickets_sold"] * df_events["price_per_ticket"]
+                display_cols = ["event_id", "title", "date", "location", "tickets_sold", "tickets_total", "price_per_ticket", "Total Revenue (BWP)"]
+                st.dataframe(
+                    df_events[display_cols].rename(columns={
+                        "event_id": "Event ID",
+                        "title": "Title",
+                        "date": "Date",
+                        "location": "Facility Location",
+                        "tickets_sold": "Tickets Sold",
+                        "tickets_total": "Capacity",
+                        "price_per_ticket": "Ticket Price (BWP)"
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
 
         with tab_venue_mgmt:
             st.subheader("Facility & Subcontractor Infrastructure")
             col_v1, col_v2 = st.columns(2, gap="large")
             with col_v1:
                 st.markdown("##### Facility Profiles")
-                st.json(db["venues"])
+                st.dataframe(pd.DataFrame(db["venues"]), use_container_width=True, hide_index=True)
             with col_v2:
                 st.markdown("##### Associated Subcontractors")
-                st.json(db["services"])
+                st.dataframe(pd.DataFrame(db["services"]), use_container_width=True, hide_index=True)
 
         with tab_billing:
             st.subheader("Platform Financial Summary")
@@ -367,11 +384,24 @@ else:
                         st.success(f"Record '{new_title}' successfully published.")
                         st.rerun()
 
-            st.json(db["events"])
+            df_events = pd.DataFrame(db["events"])
+            if not df_events.empty:
+                st.dataframe(
+                    df_events[["event_id", "title", "date", "tickets_sold", "tickets_total", "price_per_ticket"]].rename(columns={
+                        "event_id": "Event ID",
+                        "title": "Title",
+                        "date": "Date",
+                        "tickets_sold": "Tickets Sold",
+                        "tickets_total": "Capacity",
+                        "price_per_ticket": "Price (BWP)"
+                    }),
+                    use_container_width=True,
+                    hide_index=True
+                )
 
         with tab_venue_mgmt:
             st.subheader("Facility Infrastructure")
-            st.json(db["venues"])
+            st.dataframe(pd.DataFrame(db["venues"]), use_container_width=True, hide_index=True)
 
         with tab_billing:
             st.subheader("Venue Settlement Statement")
