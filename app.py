@@ -7,18 +7,18 @@ import json
 import os
 import io
 
-# ReportLab PDF Generation
+# ReportLab Engine (In-Memory PDF Generation)
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# QR Code Generation
+# QR Code Engine
 import qrcode
 from PIL import Image
 
 # ---------------------------------------------------------
-# 1. DATABASE & STORAGE ENGINE (SQLITE)
+# 1. DATABASE & STORAGE ENGINE (CLOUD-READY SQL)
 # ---------------------------------------------------------
 DB_FILE = "enterprise_platform.db"
 
@@ -26,76 +26,60 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # Users / Auth Table
+    # Auth Users
     c.execute('''CREATE TABLE IF NOT EXISTS users (
-        user_id TEXT PRIMARY KEY,
-        email TEXT UNIQUE,
-        password_hash TEXT,
-        role TEXT,
-        tenant_id TEXT
+        user_id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, role TEXT, tenant_id TEXT
     )''')
 
-    # Venues / Facilities Table
+    # Venues
     c.execute('''CREATE TABLE IF NOT EXISTS venues (
-        venue_id TEXT PRIMARY KEY,
-        name TEXT, type TEXT, email TEXT, phone TEXT, whatsapp_no TEXT,
-        address TEXT, max_capacity INTEGER, tax_id TEXT, bank_details TEXT,
-        brand_color TEXT, brand_secondary TEXT, logo_url TEXT, flyer_image_url TEXT,
-        approved_supporter_ids TEXT
+        venue_id TEXT PRIMARY KEY, name TEXT, type TEXT, email TEXT, phone TEXT, whatsapp_no TEXT,
+        address TEXT, max_capacity INTEGER, tax_id TEXT, bank_details TEXT, brand_color TEXT,
+        logo_url TEXT, flyer_image_url TEXT, approved_supporter_ids TEXT
     )''')
     
-    # Venue Sub-Spaces Table
+    # Sub-Spaces
     c.execute('''CREATE TABLE IF NOT EXISTS spaces (
-        space_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        venue_id TEXT, name TEXT, capacity INTEGER, daily_rate REAL, image_url TEXT,
-        FOREIGN KEY(venue_id) REFERENCES venues(venue_id)
+        space_id INTEGER PRIMARY KEY AUTOINCREMENT, venue_id TEXT, name TEXT, capacity INTEGER, daily_rate REAL, image_url TEXT
     )''')
     
-    # Supporters / Vendors Table
+    # Supporters / Vendors
     c.execute('''CREATE TABLE IF NOT EXISTS supporters (
-        supporter_id TEXT PRIMARY KEY,
-        business_name TEXT, category TEXT, contact_person TEXT, email TEXT,
-        phone TEXT, bank_details TEXT, brand_color TEXT, logo_url TEXT
+        supporter_id TEXT PRIMARY KEY, business_name TEXT, category TEXT, contact_person TEXT,
+        email TEXT, phone TEXT, bank_details TEXT, brand_color TEXT, logo_url TEXT
     )''')
     
-    # Vendor Quotation / Item Templates Table
+    # Vendor Package Templates
     c.execute('''CREATE TABLE IF NOT EXISTS vendor_templates (
-        template_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        supporter_id TEXT, item_name TEXT, description TEXT, unit_type TEXT,
-        unit_price REAL, image_url TEXT,
-        FOREIGN KEY(supporter_id) REFERENCES supporters(supporter_id)
+        template_id INTEGER PRIMARY KEY AUTOINCREMENT, supporter_id TEXT, item_name TEXT, description TEXT,
+        unit_type TEXT, unit_price REAL, image_url TEXT
     )''')
     
-    # Venue Bookings Table
+    # Venue Bookings
     c.execute('''CREATE TABLE IF NOT EXISTS bookings (
-        booking_id TEXT PRIMARY KEY, venue_id TEXT, space_name TEXT,
-        customer_name TEXT, customer_email TEXT, customer_phone TEXT,
-        booking_date TEXT, days INTEGER, venue_cost REAL, payment_method TEXT,
-        status TEXT, pop_reference TEXT, created_at TEXT,
-        FOREIGN KEY(venue_id) REFERENCES venues(venue_id)
+        booking_id TEXT PRIMARY KEY, venue_id TEXT, space_name TEXT, customer_name TEXT,
+        customer_email TEXT, customer_phone TEXT, booking_date TEXT, days INTEGER, venue_cost REAL,
+        payment_method TEXT, status TEXT, pop_reference TEXT, created_at TEXT
     )''')
     
-    # Vendor Invoices Table
+    # Vendor Invoices
     c.execute('''CREATE TABLE IF NOT EXISTS vendor_invoices (
-        vendor_invoice_id TEXT PRIMARY KEY, parent_booking_id TEXT, supporter_id TEXT,
-        venue_name TEXT, customer_name TEXT, customer_email TEXT, customer_phone TEXT,
-        event_date TEXT, items_json TEXT, total_amount REAL, payment_method TEXT,
-        status TEXT, pop_reference TEXT, created_at TEXT,
-        FOREIGN KEY(supporter_id) REFERENCES supporters(supporter_id)
+        vendor_invoice_id TEXT PRIMARY KEY, parent_booking_id TEXT, supporter_id TEXT, venue_name TEXT,
+        customer_name TEXT, customer_email TEXT, customer_phone TEXT, event_date TEXT, items_json TEXT,
+        total_amount REAL, payment_method TEXT, status TEXT, pop_reference TEXT, created_at TEXT
     )''')
     
-    # Event Tickets Table
+    # Tickets
     c.execute('''CREATE TABLE IF NOT EXISTS tickets (
-        ticket_id TEXT PRIMARY KEY, verification_hash TEXT, event_id TEXT,
-        event_title TEXT, venue_id TEXT, venue_name TEXT, venue_logo TEXT,
-        buyer TEXT, email TEXT, qty INTEGER, total_paid REAL, payment_method TEXT,
-        status TEXT, pop_reference TEXT, scanned_at TEXT
+        ticket_id TEXT PRIMARY KEY, verification_hash TEXT, event_id TEXT, event_title TEXT, venue_id TEXT,
+        venue_name TEXT, venue_logo TEXT, buyer TEXT, email TEXT, qty INTEGER, total_paid REAL,
+        payment_method TEXT, status TEXT, pop_reference TEXT, scanned_at TEXT
     )''')
     
-    # Events Table
+    # Events
     c.execute('''CREATE TABLE IF NOT EXISTS events (
-        event_id TEXT PRIMARY KEY, venue_id TEXT, venue_name TEXT, space_name TEXT,
-        title TEXT, date TEXT, price REAL, description TEXT, flyer_url TEXT
+        event_id TEXT PRIMARY KEY, venue_id TEXT, venue_name TEXT, space_name TEXT, title TEXT, date TEXT,
+        price REAL, description TEXT, flyer_url TEXT
     )''')
     
     conn.commit()
@@ -104,53 +88,55 @@ def init_db():
 init_db()
 
 def get_db_connection():
+    # Replace DB_FILE string with Supabase/PostgreSQL URI when deploying to production
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     return conn
 
 # ---------------------------------------------------------
-# 2. HELPER UTILITIES: AUTH, PDF, & QR GENERATION
+# 2. LIGHTWEIGHT IMAGE & IN-MEMORY PDF ENGINE
 # ---------------------------------------------------------
-SPACE_PRESETS = [
-    "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=500",
-    "https://images.unsplash.com/photo-1511578314322-379afb476865?w=500",
-    "https://images.unsplash.com/photo-1431540015161-0bf868a2d407?w=500",
-    "https://images.unsplash.com/photo-1540575861501-7cf05a4b125a?w=500"
-]
-DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200"
+DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150"
+SPACE_PRESETS = ["https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=400"]
 
 def hash_pw(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-def process_image_upload(uploaded_file, fallback_url):
+def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=600):
+    """Compresses uploaded images to JPEG max 600px width/height before base64 encoding to minimize DB size."""
     if uploaded_file is not None:
         try:
-            bytes_data = uploaded_file.getvalue()
-            b64_str = base64.b64encode(bytes_data).decode()
-            mime_type = uploaded_file.type if uploaded_file.type else "image/png"
-            return f"data:{mime_type};base64,{b64_str}"
+            img = Image.open(uploaded_file)
+            img.thumbnail((max_dim, max_dim))
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+            
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", quality=65, optimize=True)
+            b64_str = base64.b64encode(buffer.getvalue()).decode()
+            return f"data:image/jpeg;base64,{b64_str}"
         except Exception:
             return fallback_url
     return fallback_url
 
 def generate_qr_code_base64(data_string):
-    qr = qrcode.QRCode(version=1, box_size=8, border=2)
+    qr = qrcode.QRCode(version=1, box_size=6, border=1)
     qr.add_data(data_string)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
     
     buffered = io.BytesIO()
     img.save(buffered, format="PNG")
-    b64_str = base64.b64encode(buffered.getvalue()).decode()
-    return f"data:image/png;base64,{b64_str}"
+    return f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode()}"
 
-def generate_pdf_invoice(title_text, inv_id, created_at, entity_name, tax_id, client_name, client_email, items_list, total_amount, bank_details):
+def generate_in_memory_pdf_bytes(title_text, inv_id, created_at, entity_name, tax_id, client_name, client_email, items_list, total_amount, bank_details):
+    """Generates PDF directly in RAM using BytesIO. No file saved to server disk."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=18, leading=22, textColor=colors.HexColor('#0F172A'))
+    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#0F172A'))
     story.append(Paragraph(f"{title_text.upper()}", title_style))
     story.append(Spacer(1, 10))
 
@@ -162,14 +148,14 @@ def generate_pdf_invoice(title_text, inv_id, created_at, entity_name, tax_id, cl
     t_meta = Table(meta_data, colWidths=[270, 270])
     t_meta.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
-        ('PADDING', (0,0), (-1,-1), 6),
+        ('PADDING', (0,0), (-1,-1), 5),
         ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1'))
     ]))
     story.append(t_meta)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 12))
 
-    table_data = [["Description / Service Item", "Qty / Duration", "Unit Rate (BWP)", "Subtotal (BWP)"]]
+    table_data = [["Description / Item", "Qty", "Rate (BWP)", "Subtotal (BWP)"]]
     for item in items_list:
         table_data.append([
             item.get('item_name', 'Service Item'),
@@ -184,11 +170,11 @@ def generate_pdf_invoice(title_text, inv_id, created_at, entity_name, tax_id, cl
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0F172A')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('PADDING', (0,0), (-1,-1), 6),
+        ('PADDING', (0,0), (-1,-1), 5),
         ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold')
     ]))
     story.append(t_items)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 12))
 
     story.append(Paragraph(f"<b>Payment Instructions & Bank Account:</b><br/>{bank_details}", styles['Normal']))
 
@@ -197,20 +183,22 @@ def generate_pdf_invoice(title_text, inv_id, created_at, entity_name, tax_id, cl
     return buffer.getvalue()
 
 # ---------------------------------------------------------
-# 3. PAGE CONFIG & STYLES
+# 3. PAGE SETUP & STYLES
 # ---------------------------------------------------------
-st.set_page_config(page_title="Enterprise Venue & Event Gateway", page_icon="🏢", layout="wide")
+st.set_page_config(page_title="Enterprise Venue Gateway", page_icon="🏢", layout="wide")
 
 st.markdown("""
     <style>
-        .main { background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .main { background-color: #F8FAFC; }
         .invoice-box { background: #FFFFFF; padding: 1.5rem; border-radius: 8px; border: 1px solid #CBD5E1; margin-bottom: 1.5rem; }
-        .profile-card { padding: 1.5rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1.5rem; }
-        .logo-img { max-height: 60px; max-width: 180px; object-fit: contain; }
+        .profile-card { padding: 1.2rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1rem; }
+        .logo-img { max-height: 50px; max-width: 150px; object-fit: contain; }
+        @media print {
+            [data-testid="stSidebar"], button, header { display: none !important; }
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# Session auth setup
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
     st.session_state["user_email"] = None
@@ -221,11 +209,11 @@ if "authenticated" not in st.session_state:
 # 4. SIDEBAR NAVIGATION
 # ---------------------------------------------------------
 st.sidebar.markdown("## 🏢 ENTERPRISE GATEWAY")
-st.sidebar.caption("Multi-Tenant Operations & Automated Ticketing")
+st.sidebar.caption("Zero-Storage Cloud Architecture")
 st.sidebar.divider()
 
 user_role = st.sidebar.radio(
-    "Active Workspace Console:",
+    "Active Console:",
     [
         "Public Booking Portal",
         "Facility Owner Console",
@@ -246,7 +234,7 @@ if st.session_state["authenticated"]:
         st.rerun()
 
 with st.sidebar.expander("System Utilities"):
-    if st.button("Purge & Reset SQLite Database", type="primary", use_container_width=True):
+    if st.button("Reset System Database", type="primary", use_container_width=True):
         if os.path.exists(DB_FILE):
             os.remove(DB_FILE)
             init_db()
@@ -259,7 +247,7 @@ with st.sidebar.expander("System Utilities"):
 # ---------------------------------------------------------
 if user_role == "Public Booking Portal":
     st.title("Central Venue Booking & Public Ticketing Portal")
-    st.caption("Reserve enterprise facilities, customize approved vendor packages, and download PDF invoices.")
+    st.caption("Reserve enterprise facilities, customize vendor packages, and receive instant invoices.")
     st.divider()
 
     tab_book, tab_tickets = st.tabs(["Book Venue & Services", "Public Event Ticket Shop"])
@@ -269,7 +257,7 @@ if user_role == "Public Booking Portal":
         venues = conn.execute("SELECT * FROM venues").fetchall()
         
         if not venues:
-            st.warning("No facility profiles published yet.")
+            st.warning("No facility profiles listed.")
         else:
             sel_v_name = st.selectbox("1. Select Venue / Facility:", [v['name'] for v in venues])
             sel_venue = next(v for v in venues if v['name'] == sel_v_name)
@@ -289,7 +277,7 @@ if user_role == "Public Booking Portal":
 
             spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ?", (sel_venue['venue_id'],)).fetchall()
             if not spaces:
-                st.warning("This facility has no listed sub-spaces.")
+                st.warning("No sub-spaces listed.")
             else:
                 st.divider()
                 st.markdown("### 2. Select Space & Event Date")
@@ -337,18 +325,16 @@ if user_role == "Public Booking Portal":
                                             sup_items.append({"item_name": t['item_name'], "qty": qty, "unit_price": t['unit_price'], "subtotal": cost})
                                     if sup_items:
                                         selected_vendor_orders[sup['supporter_id']] = {"info": sup, "items": sup_items, "total": sup_total}
-                    else:
-                        st.info("No supplier add-ons currently assigned to this facility.")
 
                     st.divider()
-                    st.markdown("### 4. Confirm Booking & Request Invoices")
+                    st.markdown("### 4. Confirm Reservation")
                     with st.form("confirm_booking_form"):
                         c_name = st.text_input("Full Name / Business Name*")
                         c_email = st.text_input("Delivery Email*")
                         c_phone = st.text_input("WhatsApp / Phone Number*")
-                        c_pay = st.selectbox("Selected Payment Option", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Deposit"])
+                        c_pay = st.selectbox("Payment Option", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Deposit"])
 
-                        if st.form_submit_button("Submit Reservation & Issue PDF Invoices", type="primary"):
+                        if st.form_submit_button("Submit Reservation & Issue Invoices", type="primary"):
                             if c_name and c_email and c_phone:
                                 b_id = f"BK-{int(datetime.datetime.now().timestamp())}"
                                 created_date = str(datetime.date.today())
@@ -368,15 +354,15 @@ if user_role == "Public Booking Portal":
                                 conn.commit()
                                 st.success(f"Reservation Request #{b_id} Created Successfully!")
                                 
-                                # Generate downloadable PDF Invoice for Venue
-                                venue_pdf = generate_pdf_invoice(
-                                    f"Venue Hire Tax Invoice — {sel_venue['name']}",
+                                # Dynamic In-Memory PDF Download Button (Generated on-the-fly in RAM)
+                                pdf_bytes = generate_in_memory_pdf_bytes(
+                                    f"Venue Tax Invoice — {sel_venue['name']}",
                                     b_id, created_date, sel_venue['name'], sel_venue['tax_id'],
                                     c_name, c_email,
                                     [{"item_name": f"Venue Hire ({sel_sp_name})", "qty": booking_days, "unit_price": sel_space['daily_rate'], "subtotal": space_cost}],
                                     space_cost, sel_venue['bank_details']
                                 )
-                                st.download_button("📄 Download Venue PDF Invoice", venue_pdf, file_name=f"Invoice_{b_id}.pdf", mime="application/pdf")
+                                st.download_button("📄 Download PDF Invoice (0 KB Disk Space)", pdf_bytes, file_name=f"Invoice_{b_id}.pdf", mime="application/pdf")
                             else:
                                 st.error("Please fill in required fields.")
         conn.close()
@@ -396,9 +382,9 @@ if user_role == "Public Booking Portal":
                 
                 with col2.form(f"tkt_buy_{ev['event_id']}"):
                     t_qty = st.number_input("Quantity", min_value=1, value=1)
-                    t_buyer = st.text_input("Buyer Full Name*")
-                    t_email = st.text_input("Delivery Email*")
-                    t_pay = st.selectbox("Payment Method", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Deposit"])
+                    t_buyer = st.text_input("Buyer Name*")
+                    t_email = st.text_input("Email*")
+                    t_pay = st.selectbox("Payment", ["eWallet", "Orange Money", "Pay2Cell", "Direct Deposit"])
                     
                     if st.form_submit_button("Request Ticket Pass"):
                         if t_buyer and t_email:
@@ -410,30 +396,28 @@ if user_role == "Public Booking Portal":
                                 (tkt_id, sec_hash, ev['event_id'], ev['title'], v['venue_id'] if v else "", ev['venue_name'], v['logo_url'] if v else DEFAULT_LOGO, t_buyer, t_email, t_qty, t_qty*ev['price'], t_pay))
                             conn.commit()
                             
-                            st.warning("Ticket Pass Reserved! Generate QR Code below:")
+                            st.warning("Ticket Reserved!")
                             qr_img_str = generate_qr_code_base64(sec_hash)
-                            st.image(qr_img_str, caption=f"Ticket QR Pass ({sec_hash})", width=180)
+                            st.image(qr_img_str, caption=f"Ticket QR Pass ({sec_hash})", width=160)
                         else:
-                            st.error("Provide buyer name and email.")
+                            st.error("Provide buyer details.")
         conn.close()
 
 # ---------------------------------------------------------
-# 6. MODULE 2: FACILITY OWNER CONSOLE (AUTH PROTECTED)
+# 6. MODULE 2: FACILITY OWNER CONSOLE
 # ---------------------------------------------------------
 elif user_role == "Facility Owner Console":
-    st.title("Facility Owner Workspace & Management Console")
-    
+    st.title("Facility Owner Workspace")
     conn = get_db_connection()
 
-    # AUTHENTICATION LOGIN GATE
     if not st.session_state["authenticated"] or st.session_state["user_role"] != "Facility Owner":
-        st.info("🔒 Facility Manager Authentication Required")
+        st.info("🔒 Facility Authentication Required")
         
-        login_tab, reg_tab = st.tabs(["Account Login", "Register New Facility Owner"])
+        login_tab, reg_tab = st.tabs(["Login", "Register Facility"])
         
         with login_tab:
             with st.form("fac_login"):
-                l_email = st.text_input("Manager Email")
+                l_email = st.text_input("Email")
                 l_pw = st.text_input("Password", type="password")
                 if st.form_submit_button("Log In"):
                     user = conn.execute("SELECT * FROM users WHERE email = ? AND password_hash = ? AND role = 'Facility Owner'",
@@ -446,60 +430,49 @@ elif user_role == "Facility Owner Console":
                         st.success("Authenticated!")
                         st.rerun()
                     else:
-                        st.error("Invalid Email or Password.")
+                        st.error("Invalid Credentials.")
 
         with reg_tab:
             with st.form("reg_facility_auth"):
                 f_name = st.text_input("Facility Name*")
                 f_type = st.selectbox("Type", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"])
-                f_email = st.text_input("Manager Email*")
-                f_pw = st.text_input("Create Password*", type="password")
-                f_phone = st.text_input("Phone Number*")
-                f_whatsapp = st.text_input("WhatsApp POP Receiver*", placeholder="26771234567")
-                f_address = st.text_input("Physical Address*")
-                f_tax = st.text_input("Tax / CIPA Registration ID*")
-                f_bank = st.text_area("Bank Payout Instructions*")
+                f_email = st.text_input("Email*")
+                f_pw = st.text_input("Password*", type="password")
+                f_phone = st.text_input("Phone*")
+                f_whatsapp = st.text_input("WhatsApp POP Line*", placeholder="26771234567")
+                f_address = st.text_input("Address*")
+                f_tax = st.text_input("Tax / CIPA ID*")
+                f_bank = st.text_area("Bank Details*")
                 f_logo = st.file_uploader("Logo", type=["png", "jpg", "jpeg"])
 
-                if st.form_submit_button("Register Facility"):
+                if st.form_submit_button("Register Facility Profile"):
                     if f_name and f_email and f_pw and f_whatsapp:
                         v_id = f"v_{int(datetime.datetime.now().timestamp())}"
-                        logo_url = process_image_upload(f_logo, DEFAULT_LOGO)
+                        logo_url = process_compressed_image_upload(f_logo, DEFAULT_LOGO)
                         
-                        # Save Venue & User
                         conn.execute("""INSERT INTO venues 
-                            (venue_id, name, type, email, phone, whatsapp_no, address, max_capacity, tax_id, bank_details, brand_color, brand_secondary, logo_url, flyer_image_url, approved_supporter_ids)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, 1000, ?, ?, '#0F172A', '#2563EB', ?, ?, '[]')""",
+                            (venue_id, name, type, email, phone, whatsapp_no, address, max_capacity, tax_id, bank_details, brand_color, logo_url, flyer_image_url, approved_supporter_ids)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 1000, ?, ?, '#0F172A', ?, ?, '[]')""",
                             (v_id, f_name, f_type, f_email, f_phone, f_whatsapp, f_address, f_tax, f_bank, logo_url, SPACE_PRESETS[0]))
                         
                         conn.execute("INSERT INTO users (user_id, email, password_hash, role, tenant_id) VALUES (?, ?, ?, 'Facility Owner', ?)",
                                      (f"usr_{int(datetime.datetime.now().timestamp())}", f_email, hash_pw(f_pw), v_id))
                         conn.commit()
-                        st.success("Account created! Please switch to Login tab.")
+                        st.success("Account created! Log in above.")
                     else:
                         st.error("Fill in required fields.")
     else:
-        # LOGGED IN WORKSPACE
         cur_v = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (st.session_state["tenant_id"],)).fetchone()
-        
-        if not cur_v:
-            st.error("Facility account record not found.")
-        else:
+        if cur_v:
             st.markdown(f"""
                 <div class="profile-card" style="background:{cur_v['brand_color']};">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <h2>🏛️ {cur_v['name']}</h2>
-                            <p>📍 {cur_v['address']} | 💬 WhatsApp POP: {cur_v['whatsapp_no']}</p>
-                        </div>
-                        <img src="{cur_v['logo_url'] or DEFAULT_LOGO}" class="logo-img" style="background:white; padding:4px; border-radius:6px;">
-                    </div>
+                    <h2>🏛️ {cur_v['name']}</h2>
+                    <p>📍 {cur_v['address']} | 💬 WhatsApp POP: {cur_v['whatsapp_no']}</p>
                 </div>
             """, unsafe_allow_html=True)
 
-            tab_spaces, tab_vendors, tab_verify, tab_edit = st.tabs(["Sub-Spaces", "🤝 Approved Vendors", "✅ Verify POPs", "✏️ Edit Profile Settings"])
+            tab_spaces, tab_vendors, tab_verify, tab_edit = st.tabs(["Sub-Spaces", "Approved Vendors", "Verify POPs", "Edit Profile"])
 
-            # CRUD: Sub-Spaces
             with tab_spaces:
                 with st.form("add_space_form"):
                     s_name = st.text_input("Sub-Space Name")
@@ -507,9 +480,9 @@ elif user_role == "Facility Owner Console":
                     s_rate = st.number_input("Daily Rate (BWP)", value=2500.0)
                     s_img = st.file_uploader("Photo", type=["png", "jpg", "jpeg"])
 
-                    if st.form_submit_button("Add Hire Sub-Space"):
+                    if st.form_submit_button("Add Space"):
                         if s_name:
-                            img_url = process_image_upload(s_img, SPACE_PRESETS[0])
+                            img_url = process_compressed_image_upload(s_img, SPACE_PRESETS[0])
                             conn.execute("INSERT INTO spaces (venue_id, name, capacity, daily_rate, image_url) VALUES (?, ?, ?, ?, ?)",
                                          (cur_v['venue_id'], s_name, s_cap, s_rate, img_url))
                             conn.commit()
@@ -520,86 +493,79 @@ elif user_role == "Facility Owner Console":
                 spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ?", (cur_v['venue_id'],)).fetchall()
                 for sp in spaces:
                     col_sp1, col_sp2 = st.columns([4, 1])
-                    col_sp1.write(f"• **{sp['name']}** — Capacity: {sp['capacity']} | BWP {sp['daily_rate']:,.2f}/day")
-                    if col_sp2.button("🗑️ Delete Space", key=f"del_sp_{sp['space_id']}"):
+                    col_sp1.write(f"• **{sp['name']}** — Cap: {sp['capacity']} | BWP {sp['daily_rate']:,.2f}/day")
+                    if col_sp2.button("🗑️ Delete", key=f"del_sp_{sp['space_id']}"):
                         conn.execute("DELETE FROM spaces WHERE space_id = ?", (sp['space_id'],))
                         conn.commit()
                         st.rerun()
 
-            # Vendor Selection Network
             with tab_vendors:
-                st.markdown("#### Approved Global Vendors")
                 all_supporters = conn.execute("SELECT * FROM supporters").fetchall()
                 cur_approved = set(json.loads(cur_v['approved_supporter_ids'] or "[]"))
 
-                if not all_supporters:
-                    st.info("No global vendors available.")
-                else:
+                if all_supporters:
                     with st.form("approve_vendors_form"):
                         new_approved = []
                         for sup in all_supporters:
                             chk = st.checkbox(f"**{sup['business_name']}** (`{sup['category']}`)", value=(sup['supporter_id'] in cur_approved))
                             if chk: new_approved.append(sup['supporter_id'])
-                        if st.form_submit_button("Save Approved Vendor List"):
+                        if st.form_submit_button("Save Network"):
                             conn.execute("UPDATE venues SET approved_supporter_ids = ? WHERE venue_id = ?",
                                          (json.dumps(new_approved), cur_v['venue_id']))
                             conn.commit()
                             st.success("Approved Network Updated!")
                             st.rerun()
 
-            # POP Verification
             with tab_verify:
                 pending_bks = conn.execute("SELECT * FROM bookings WHERE venue_id = ? AND status = 'Pending POP / Verification'", (cur_v['venue_id'],)).fetchall()
                 if not pending_bks:
-                    st.success("No pending POP submissions.")
+                    st.success("No pending POPs.")
                 else:
                     for bk in pending_bks:
                         st.write(f"**Booking #{bk['booking_id']}** — Client: {bk['customer_name']} | BWP {bk['venue_cost']:,.2f}")
                         with st.form(f"verify_bk_{bk['booking_id']}"):
-                            ref = st.text_input("Enter WhatsApp Transaction / POP Ref")
-                            if st.form_submit_button("✅ Verify & Confirm"):
+                            ref = st.text_input("Enter WhatsApp Ref")
+                            if st.form_submit_button("✅ Verify"):
                                 if ref:
                                     conn.execute("UPDATE bookings SET status = 'Confirmed / Paid', pop_reference = ? WHERE booking_id = ?", (ref, bk['booking_id']))
                                     conn.commit()
                                     st.success("Booking Verified!")
                                     st.rerun()
 
-            # CRUD: Edit Profile
             with tab_edit:
                 with st.form("edit_facility_profile"):
                     u_name = st.text_input("Facility Name", value=cur_v['name'])
-                    u_phone = st.text_input("Phone Number", value=cur_v['phone'])
-                    u_wa = st.text_input("WhatsApp POP Line", value=cur_v['whatsapp_no'])
+                    u_phone = st.text_input("Phone", value=cur_v['phone'])
+                    u_wa = st.text_input("WhatsApp Line", value=cur_v['whatsapp_no'])
                     u_bank = st.text_area("Bank Details", value=cur_v['bank_details'])
                     u_color = st.color_picker("Brand Color", value=cur_v['brand_color'])
                     u_logo = st.file_uploader("Update Logo", type=["png", "jpg", "jpeg"])
 
-                    if st.form_submit_button("Save Profile Changes"):
-                        logo_url = process_image_upload(u_logo, cur_v['logo_url'])
+                    if st.form_submit_button("Save Profile"):
+                        logo_url = process_compressed_image_upload(u_logo, cur_v['logo_url'])
                         conn.execute("""UPDATE venues SET name = ?, phone = ?, whatsapp_no = ?, bank_details = ?, brand_color = ?, logo_url = ?
                             WHERE venue_id = ?""", (u_name, u_phone, u_wa, u_bank, u_color, logo_url, cur_v['venue_id']))
                         conn.commit()
-                        st.success("Profile Updated!")
+                        st.success("Profile Saved!")
                         st.rerun()
 
     conn.close()
 
 # ---------------------------------------------------------
-# 7. MODULE 3: FACILITY SUPPORTER CONSOLE (AUTH PROTECTED)
+# 7. MODULE 3: FACILITY SUPPORTER CONSOLE
 # ---------------------------------------------------------
 elif user_role == "Facility Supporter Console":
     st.title("Facility Supporter Console (Vendors)")
-    
     conn = get_db_connection()
 
     if not st.session_state["authenticated"] or st.session_state["user_role"] != "Facility Supporter":
-        st.info("🔒 Vendor Account Authentication Required")
+        st.info("🔒 Vendor Authentication Required")
         
-        login_tab, reg_tab = st.tabs(["Vendor Login", "Register Vendor Account"])
+        login_tab, reg_tab = st.tabs(["Login", "Register Vendor"])
         
         with login_tab:
             with st.form("sup_login"):
-                l_email = st.text_input("Vendor Email")
+                l_email = st.text_input("Email")
                 l_pw = st.text_input("Password", type="password")
                 if st.form_submit_button("Log In"):
                     user = conn.execute("SELECT * FROM users WHERE email = ? AND password_hash = ? AND role = 'Facility Supporter'",
@@ -616,20 +582,20 @@ elif user_role == "Facility Supporter Console":
 
         with reg_tab:
             with st.form("reg_supporter_auth"):
-                s_name = st.text_input("Trading Business Name*")
+                s_name = st.text_input("Business Name*")
                 s_cat = st.selectbox("Category", ["Catering & Cutlery", "Stage & Decor", "Sound & AV", "Florist", "Security"])
                 s_person = st.text_input("Contact Person*")
                 s_email = st.text_input("Email*")
                 s_pw = st.text_input("Password*", type="password")
-                s_phone = st.text_input("WhatsApp Number for POPs*", placeholder="26771234567")
-                s_bank = st.text_area("Bank Account Details*")
+                s_phone = st.text_input("WhatsApp Line*", placeholder="26771234567")
+                s_bank = st.text_area("Bank Details*")
                 s_color = st.color_picker("Brand Color", "#1E293B")
                 s_logo = st.file_uploader("Logo", type=["png", "jpg", "jpeg"])
 
-                if st.form_submit_button("Register Supporter Account"):
+                if st.form_submit_button("Register Vendor Account"):
                     if s_name and s_email and s_pw and s_phone:
                         sup_id = f"sup_{int(datetime.datetime.now().timestamp())}"
-                        logo_url = process_image_upload(s_logo, DEFAULT_LOGO)
+                        logo_url = process_compressed_image_upload(s_logo, DEFAULT_LOGO)
                         
                         conn.execute("""INSERT INTO supporters 
                             (supporter_id, business_name, category, contact_person, email, phone, bank_details, brand_color, logo_url)
@@ -639,15 +605,12 @@ elif user_role == "Facility Supporter Console":
                         conn.execute("INSERT INTO users (user_id, email, password_hash, role, tenant_id) VALUES (?, ?, ?, 'Facility Supporter', ?)",
                                      (f"usr_{int(datetime.datetime.now().timestamp())}", s_email, hash_pw(s_pw), sup_id))
                         conn.commit()
-                        st.success("Vendor Profile Created! Switch to Login tab.")
+                        st.success("Profile Created! Log in above.")
                     else:
                         st.error("Fill in required fields.")
     else:
         cur_sup = conn.execute("SELECT * FROM supporters WHERE supporter_id = ?", (st.session_state["tenant_id"],)).fetchone()
-        
-        if not cur_sup:
-            st.error("Vendor account profile not found.")
-        else:
+        if cur_sup:
             st.markdown(f"""
                 <div class="profile-card" style="background:{cur_sup['brand_color']};">
                     <h2>🚚 {cur_sup['business_name']}</h2>
@@ -655,26 +618,25 @@ elif user_role == "Facility Supporter Console":
                 </div>
             """, unsafe_allow_html=True)
 
-            vtab1, vtab2, vtab3 = st.tabs(["Service Catalog", "✅ Verify Invoices", "✏️ Edit Profile"])
+            vtab1, vtab2, vtab3 = st.tabs(["Service Catalog", "Verify Invoices", "Edit Profile"])
 
-            # CRUD: Packages
             with vtab1:
                 with st.form("add_pkg_form"):
                     i_name = st.text_input("Package Item Name*")
-                    i_desc = st.text_area("Package Specifications")
+                    i_desc = st.text_area("Specifications")
                     i_type = st.selectbox("Unit Metric", ["Per Guest", "Per Day", "Flat Rate", "Per Hour"])
-                    i_price = st.number_input("Rate Price (BWP)", min_value=1.0, value=150.0)
+                    i_price = st.number_input("Rate (BWP)", min_value=1.0, value=150.0)
                     i_photo = st.file_uploader("Item Image", type=["png", "jpg", "jpeg"])
 
                     if st.form_submit_button("Add Offering Item"):
                         if i_name:
-                            img_url = process_image_upload(i_photo, SPACE_PRESETS[1])
+                            img_url = process_compressed_image_upload(i_photo, SPACE_PRESETS[0])
                             conn.execute("""INSERT INTO vendor_templates 
                                 (supporter_id, item_name, description, unit_type, unit_price, image_url)
                                 VALUES (?, ?, ?, ?, ?, ?)""",
                                 (cur_sup['supporter_id'], i_name, i_desc, i_type, i_price, img_url))
                             conn.commit()
-                            st.success("Offering Item Added!")
+                            st.success("Offering Added!")
                             st.rerun()
 
                 st.divider()
@@ -690,12 +652,12 @@ elif user_role == "Facility Supporter Console":
             with vtab2:
                 v_invs = conn.execute("SELECT * FROM vendor_invoices WHERE supporter_id = ? AND status = 'Pending POP'", (cur_sup['supporter_id'],)).fetchall()
                 if not v_invs:
-                    st.success("No pending supplier invoices.")
+                    st.success("No pending invoices.")
                 else:
                     for inv in v_invs:
                         st.write(f"**Invoice #{inv['vendor_invoice_id']}** — Client: {inv['customer_name']} | BWP {inv['total_amount']:,.2f}")
                         with st.form(f"verify_vinv_{inv['vendor_invoice_id']}"):
-                            ref = st.text_input("Enter WhatsApp Transaction Ref")
+                            ref = st.text_input("Enter WhatsApp Ref")
                             if st.form_submit_button("✅ Verify POP"):
                                 if ref:
                                     conn.execute("UPDATE vendor_invoices SET status = 'PAID & VERIFIED', pop_reference = ? WHERE vendor_invoice_id = ?", (ref, inv['vendor_invoice_id']))
@@ -703,16 +665,15 @@ elif user_role == "Facility Supporter Console":
                                     st.success("Invoice Paid!")
                                     st.rerun()
 
-            # CRUD: Vendor Profile Edit
             with vtab3:
                 with st.form("edit_vendor_profile"):
-                    u_phone = st.text_input("WhatsApp Phone Line", value=cur_sup['phone'])
-                    u_bank = st.text_area("Bank Account Details", value=cur_sup['bank_details'])
-                    u_color = st.color_picker("Corporate Brand Color", value=cur_sup['brand_color'])
+                    u_phone = st.text_input("WhatsApp Line", value=cur_sup['phone'])
+                    u_bank = st.text_area("Bank Details", value=cur_sup['bank_details'])
+                    u_color = st.color_picker("Brand Color", value=cur_sup['brand_color'])
                     u_logo = st.file_uploader("Update Logo", type=["png", "jpg", "jpeg"])
 
-                    if st.form_submit_button("Save Profile Setup"):
-                        logo_url = process_image_upload(u_logo, cur_sup['logo_url'])
+                    if st.form_submit_button("Save Setup"):
+                        logo_url = process_compressed_image_upload(u_logo, cur_sup['logo_url'])
                         conn.execute("""UPDATE supporters SET phone = ?, bank_details = ?, brand_color = ?, logo_url = ?
                             WHERE supporter_id = ?""", (u_phone, u_bank, u_color, logo_url, cur_sup['supporter_id']))
                         conn.commit()
@@ -725,17 +686,15 @@ elif user_role == "Facility Supporter Console":
 # 8. MODULE 4: GATE ACCESS & CAMERA QR SCANNER
 # ---------------------------------------------------------
 elif user_role == "Gate Access & Mobile Scanner":
-    st.title("Door Gate Access & Mobile QR Verification")
-    st.caption("Point camera at guest QR ticket passes or type verification hashes.")
+    st.title("Door Gate Access & Mobile QR Scanner")
+    st.caption("Point camera at guest QR passes or type verification hashes.")
     st.divider()
 
     conn = get_db_connection()
-    
     camera_file = st.camera_input("Point camera at guest QR pass")
+    scan_input = st.text_input("Or Enter Verification Hash manually:")
 
-    scan_input = st.text_input("Or Enter Pass Verification Hash / Ticket ID manually:")
-
-    if st.button("Validate Pass Admission", type="primary"):
+    if st.button("Validate Admission Pass", type="primary"):
         target_str = scan_input.strip().upper()
         if target_str:
             tkt = conn.execute("SELECT * FROM tickets WHERE verification_hash = ? OR ticket_id = ?", (target_str, target_str)).fetchone()
@@ -745,9 +704,9 @@ elif user_role == "Gate Access & Mobile Scanner":
                     conn.commit()
                     st.success(f"✅ ACCESS GRANTED: {tkt['buyer']} ({tkt['qty']} Person/s) — Event: {tkt['event_title']}")
                 elif 'Pending' in tkt['status']:
-                    st.warning("⚠️ UNVERIFIED TICKET: Payment POP has not been confirmed by facility manager.")
+                    st.warning("⚠️ UNVERIFIED TICKET: Payment POP has not been confirmed.")
                 else:
-                    st.error("❌ INVALID: Ticket pass already redeemed.")
+                    st.error("❌ INVALID: Pass already redeemed.")
             else:
                 st.error("❌ Invalid Ticket Pass.")
     conn.close()
@@ -757,7 +716,7 @@ elif user_role == "Gate Access & Mobile Scanner":
 # ---------------------------------------------------------
 elif user_role == "Master Platform Control":
     st.title("Master Enterprise Platform Control")
-    st.caption("Platform analytics and data audit tables.")
+    st.caption("Executive overview and data audit tables.")
     st.divider()
 
     conn = get_db_connection()
