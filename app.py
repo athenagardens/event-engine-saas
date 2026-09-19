@@ -2,13 +2,16 @@ import streamlit as st
 import json
 import os
 
-# --- DATABASE SETUP ---
+# --- CONFIGURACIÓN DE BASE DE DATOS ---
 DB_FILE = "enterprise_event_platform_db.json"
 
 def load_data():
     if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
+        try:
+            with open(DB_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
     return {"venues": [], "supporters": [], "events": [], "bookings": []}
 
 def save_data(data):
@@ -17,11 +20,11 @@ def save_data(data):
 
 db = load_data()
 
-# --- APP CONFIGURATION ---
-st.set_page_config(page_title="Enterprise Event Platform", layout="wide")
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Enterprise Event Platform", layout="wide", page_icon="🎪")
 st.title("🎪 Enterprise Event & Venue Management Platform")
 
-# --- SIDEBAR NAVIGATION & ROLES ---
+# --- NAVEGACIÓN LATERAL ---
 st.sidebar.header("Navigation & Role Portal")
 user_role = st.sidebar.selectbox(
     "Select Your Role / Portal:",
@@ -33,7 +36,6 @@ user_role = st.sidebar.selectbox(
 )
 
 st.sidebar.markdown("---")
-# Quick database reset utility for testing workflows
 with st.sidebar.expander("🛠️ Developer Tools"):
     if st.button("Reset Entire Database", type="primary"):
         db = {"venues": [], "supporters": [], "events": [], "bookings": []}
@@ -48,8 +50,7 @@ with st.sidebar.expander("🛠️ Developer Tools"):
 if user_role == "Facility Owner (Venue)":
     st.subheader("🏢 Facility Owner Management Portal")
 
-    # Check if a venue is already registered
-    if not db["venues"]:
+    if not db.get("venues"):
         st.info("👋 Welcome! Register your primary facility profile below to begin managing spaces and hosting events.")
         
         with st.form("facility_registration_form"):
@@ -102,11 +103,17 @@ if user_role == "Facility Owner (Venue)":
                     st.error("Please fill in all mandatory fields marked with (*).")
 
     else:
-        # Enforce single facility view
+        # Lectura segura de los campos del establecimiento activo
         cur_v = db["venues"][0]
+        v_name = cur_v.get("name", "Unnamed Facility")
+        v_type = cur_v.get("type", "General Venue")
+        v_address = cur_v.get("address", "N/A")
+        v_phone = cur_v.get("phone", "N/A")
+        v_email = cur_v.get("manager_email", "N/A")
+        v_tax = cur_v.get("tax_id", "N/A")
         
-        st.success(f"📌 **Active Facility:** {cur_v['name']} ({cur_v['type']}) | 📍 {cur_v['address']}")
-        st.caption(f"Contact: {cur_v['phone']} | Email: {cur_v['manager_email']} | Tax ID: {cur_v['tax_id']}")
+        st.success(f"📌 **Active Facility:** {v_name} ({v_type}) | 📍 {v_address}")
+        st.caption(f"Contact: {v_phone} | Email: {v_email} | Tax ID: {v_tax}")
 
         with st.expander("⚙️ Manage Facility Profile"):
             if st.button("Unlink Facility & Clear Profile"):
@@ -114,7 +121,6 @@ if user_role == "Facility Owner (Venue)":
                 save_data(db)
                 st.rerun()
 
-        # Tabs for Venue Management
         t_spaces, t_events, t_vendors = st.tabs([
             "Configured Sub-Spaces", 
             "Facility Events", 
@@ -122,7 +128,7 @@ if user_role == "Facility Owner (Venue)":
         ])
 
         with t_spaces:
-            st.markdown(f"#### Add Hire Spaces / Areas within {cur_v['name']}")
+            st.markdown(f"#### Add Hire Spaces / Areas within {v_name}")
             with st.form("add_space_form"):
                 col_a, col_b, col_c = st.columns(3)
                 with col_a:
@@ -134,8 +140,8 @@ if user_role == "Facility Owner (Venue)":
                 
                 if st.form_submit_button("Add Area"):
                     if s_name:
-                        cur_v["spaces"].append({
-                            "space_id": f"sp_{len(cur_v['spaces'])+101}",
+                        cur_v.setdefault("spaces", []).append({
+                            "space_id": f"sp_{len(cur_v.get('spaces', []))+101}",
                             "name": s_name,
                             "capacity": s_cap,
                             "daily_rate": s_rate
@@ -145,20 +151,21 @@ if user_role == "Facility Owner (Venue)":
                         st.rerun()
 
             st.markdown("##### Existing Areas")
-            if cur_v["spaces"]:
-                for sp in cur_v["spaces"]:
-                    st.write(f"• **{sp['name']}** — Capacity: {sp['capacity']} guests | Rate: **BWP {sp['daily_rate']:,.2f}/day**")
+            spaces = cur_v.get("spaces", [])
+            if spaces:
+                for sp in spaces:
+                    st.write(f"• **{sp.get('name')}** — Capacity: {sp.get('capacity')} guests | Rate: **BWP {sp.get('daily_rate', 0):,.2f}/day**")
             else:
                 st.info("No individual sub-spaces added yet.")
 
         with t_vendors:
             st.markdown("#### Registered Facility Supporters / Service Network")
-            if db["supporters"]:
+            if db.get("supporters"):
                 for sup in db["supporters"]:
                     st.markdown(f"""
-                    * **{sup['business_name']}** (`{sup['category']}`)
-                      * **Contact:** {sup['contact_person']} ({sup['phone']} | {sup['email']})
-                      * **Coverage:** {sup['service_area']} | **Compliance:** {'✅ Insurance Verified' if sup['has_insurance'] else '⚠️ No Insurance Recorded'}
+                    * **{sup.get('business_name')}** (`{sup.get('category')}`)
+                      * **Contact:** {sup.get('contact_person')} ({sup.get('phone')} | {sup.get('email')})
+                      * **Coverage:** {sup.get('service_area')} | **Compliance:** {'✅ Insurance Verified' if sup.get('has_insurance') else '⚠️ No Insurance Recorded'}
                     """)
             else:
                 st.info("No facility supporters have registered on the platform yet.")
@@ -211,7 +218,7 @@ elif user_role == "Facility Supporter (Vendor/Supplier)":
         if submit_sup:
             if s_biz_name and s_person and s_email and s_phone and s_area:
                 new_supporter = {
-                    "supporter_id": f"sup_{len(db['supporters'])+101}",
+                    "supporter_id": f"sup_{len(db.get('supporters', []))+101}",
                     "business_name": s_biz_name,
                     "category": s_category,
                     "contact_person": s_person,
@@ -224,7 +231,7 @@ elif user_role == "Facility Supporter (Vendor/Supplier)":
                     "has_safety_cert": s_safety,
                     "status": "Verified"
                 }
-                db["supporters"].append(new_supporter)
+                db.setdefault("supporters", []).append(new_supporter)
                 save_data(db)
                 st.success(f"🎉 Supporter '{s_biz_name}' successfully registered!")
                 st.rerun()
@@ -240,13 +247,13 @@ elif user_role == "Platform Admin / Overview":
 
     col_m1, col_m2 = st.columns(2)
     with col_m1:
-        st.metric("Total Facilities Registered", len(db["venues"]))
+        st.metric("Total Facilities Registered", len(db.get("venues", [])))
     with col_m2:
-        st.metric("Total Supporters Registered", len(db["supporters"]))
+        st.metric("Total Supporters Registered", len(db.get("supporters", [])))
 
     st.markdown("---")
     st.markdown("### 🏢 Facilities Summary")
-    st.json(db["venues"])
+    st.json(db.get("venues", []))
 
     st.markdown("### 🛠️ Supporters Summary")
-    st.json(db["supporters"])
+    st.json(db.get("supporters", []))
