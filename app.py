@@ -37,12 +37,9 @@ def inject_custom_css():
             .stButton>button:hover {
                 background-color: #1D4ED8;
             }
-            .flyer-card {
-                background-color: white;
-                border: 2px solid #E2E8F0;
-                border-radius: 12px;
-                padding: 20px;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            .stDeleteButton>button {
+                background-color: #DC2626 !important;
+                color: white !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -97,7 +94,6 @@ def load_data():
             ],
             "facility_bookings": [],
             "ticket_orders": [],
-            "supplier_quotes": [],
             "platform_invoices": []
         }
         with open(DB_FILE, "w") as f:
@@ -113,7 +109,7 @@ def save_data(data):
 db = load_data()
 
 # ---------------------------------------------------------
-# 3. DIGITAL PDF GENERATOR (Invoices & Digital Tickets)
+# 3. DIGITAL PDF GENERATOR
 # ---------------------------------------------------------
 def generate_pdf(document_title, fields_dict, footer_note=""):
     pdf = FPDF()
@@ -143,7 +139,7 @@ def generate_pdf(document_title, fields_dict, footer_note=""):
     return bytes(pdf_bytes)
 
 # ---------------------------------------------------------
-# 4. INITIALIZATION & QUERY PARAMETERS (FACILITY FILTERING)
+# 4. INITIALIZATION & QUERY PARAMETERS
 # ---------------------------------------------------------
 st.set_page_config(page_title="Enterprise Venue Marketplace & Ticketing Portal", layout="wide")
 inject_custom_css()
@@ -155,13 +151,13 @@ param_facility = query_params.get("facility")
 param_event = query_params.get("event")
 
 # =========================================================
-# ROUTE 1: PUBLIC CUSTOMER GATEWAY (ISOLATED FLYER / LINK VIEW)
+# ROUTE 1: PUBLIC CUSTOMER GATEWAY (ISOLATED FLYER VIEW)
 # =========================================================
 if param_facility or param_event:
     target_venue = next((v for v in db["venues"] if v["venue_id"] == param_facility), None) if param_facility else None
     target_event = next((e for e in db["events"] if e["event_id"] == param_event), None) if param_event else None
 
-    # Scenario A: Customer Clicked an Event Ticket Link / Flyer
+    # Scenario A: Event Flyer Link
     if target_event:
         v_host = next((v for v in db["venues"] if v["venue_id"] == target_event["venue_id"]), None)
         st.subheader("Digital Interactive Flyer & Ticket Portal")
@@ -227,7 +223,7 @@ if param_facility or param_event:
             else:
                 st.error("Event Allocation Fully Sold Out.")
 
-    # Scenario B: Customer Clicked a Facility Hire Link (Filtered Facility Profile)
+    # Scenario B: Facility Hire Link
     elif target_venue:
         st.title(f"Welcome to {target_venue['name']}")
         st.caption(f"Physical Address: {target_venue['address']}")
@@ -314,7 +310,7 @@ if param_facility or param_event:
                         st.error("Name and Email required.")
 
 # =========================================================
-# ROUTE 2: MANAGEMENT CONSOLE (4 PLAYER ROLES)
+# ROUTE 2: MANAGEMENT CONSOLE WITH EDIT & DELETE CONTROLS
 # =========================================================
 else:
     st.sidebar.markdown("### Role Portal Switcher")
@@ -380,8 +376,28 @@ else:
                         st.rerun()
 
                 st.divider()
-                st.markdown("##### Configured Facility Sections")
-                st.dataframe(pd.DataFrame(cur_v["spaces"]), use_container_width=True, hide_index=True)
+                st.markdown("##### Configured Facility Sections (Manage / Delete)")
+                if cur_v["spaces"]:
+                    for idx, sp in enumerate(cur_v["spaces"]):
+                        c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+                        c1.write(f"**{sp['name']}**")
+                        c2.write(f"Cap: {sp['capacity']} guests")
+                        c3.write(f"BWP {sp['daily_rate']:,.2f}/day")
+                        if c4.button("Delete", key=f"del_sp_{sp['space_id']}"):
+                            cur_v["spaces"].pop(idx)
+                            save_data(db)
+                            st.warning(f"Deleted {sp['name']}")
+                            st.rerun()
+                else:
+                    st.caption("No sub-spaces added yet.")
+
+                st.divider()
+                with st.expander("🗑️ Delete Entire Facility Profile"):
+                    if st.button(f"Delete Facility '{cur_v['name']}' Permanently"):
+                        db["venues"] = [v for v in db["venues"] if v["venue_id"] != cur_v["venue_id"]]
+                        save_data(db)
+                        st.error(f"Facility '{cur_v['name']}' deleted!")
+                        st.rerun()
 
         with t_events:
             if active_v_name:
@@ -407,6 +423,21 @@ else:
                         st.success(f"Event '{et}' published!")
                         st.rerun()
 
+                st.divider()
+                st.markdown("##### Existing Events (Manage / Delete)")
+                v_events = [e for e in db["events"] if e["venue_id"] == cur_v["venue_id"]]
+                if v_events:
+                    for idx, e in enumerate(v_events):
+                        ce1, ce2, ce3, ce4 = st.columns([3, 2, 2, 1])
+                        ce1.write(f"**{e['title']}** ({e['date']})")
+                        ce2.write(f"Price: BWP {e['ticket_price']:,.2f}")
+                        ce3.write(f"Sold: {e['tickets_sold']}/{e['tickets_total']}")
+                        if ce4.button("Delete", key=f"del_evt_{e['event_id']}"):
+                            db["events"] = [item for item in db["events"] if item["event_id"] != e["event_id"]]
+                            save_data(db)
+                            st.warning(f"Deleted Event '{e['title']}'")
+                            st.rerun()
+
         with t_flyers:
             if active_v_name:
                 cur_v = next(v for v in db["venues"] if v["name"] == active_v_name)
@@ -431,8 +462,18 @@ else:
                         st.markdown(f'<a href="https://wa.me/?text={wa_evt_msg}" target="_blank"><button style="width:100%; height:40px;">Share Event Ticket on WhatsApp</button></a>', unsafe_allow_html=True)
 
         with t_bookings:
-            st.markdown("##### Hire Orders & Ticket Revenue")
-            st.dataframe(pd.DataFrame(db["facility_bookings"]), use_container_width=True, hide_index=True)
+            st.markdown("##### Hire Orders Log (Manage / Delete)")
+            if db["facility_bookings"]:
+                for idx, bk in enumerate(db["facility_bookings"]):
+                    cb1, cb2, cb3, cb4 = st.columns([3, 2, 2, 1])
+                    cb1.write(f"**{bk['customer_name']}** ({bk['venue_name']})")
+                    cb2.write(f"Date: {bk['hire_date']}")
+                    cb3.write(f"BWP {bk['total_amount']:,.2f}")
+                    if cb4.button("Cancel / Delete", key=f"del_bk_{bk['booking_id']}"):
+                        db["facility_bookings"].pop(idx)
+                        save_data(db)
+                        st.warning(f"Booking {bk['booking_id']} removed!")
+                        st.rerun()
 
     # -----------------------------------------------------
     # PLAYER ROLE B: FACILITY SUPPORTER (SUPPLIER)
@@ -476,8 +517,28 @@ else:
                         st.rerun()
 
                 st.divider()
-                st.markdown("##### Active Catalogue Items")
-                st.dataframe(pd.DataFrame(cur_s["catalogue"]), use_container_width=True, hide_index=True)
+                st.markdown("##### Active Catalogue Items (Manage / Delete)")
+                if cur_s["catalogue"]:
+                    for idx, item in enumerate(cur_s["catalogue"]):
+                        cs1, cs2, cs3, cs4 = st.columns([3, 2, 2, 1])
+                        cs1.write(f"**{item['name']}**")
+                        cs2.write(f"BWP {item['price']:,.2f}")
+                        cs3.write(f"Unit: {item['unit']}")
+                        if cs4.button("Delete Item", key=f"del_itm_{item['item_id']}"):
+                            cur_s["catalogue"].pop(idx)
+                            save_data(db)
+                            st.warning(f"Deleted {item['name']}")
+                            st.rerun()
+                else:
+                    st.caption("No catalogue items added yet.")
+
+                st.divider()
+                with st.expander("🗑️ Delete Entire Supporter Profile"):
+                    if st.button(f"Delete Supporter '{cur_s['name']}' Permanently"):
+                        db["suppliers"] = [s for s in db["suppliers"] if s["supplier_id"] != cur_s["supplier_id"]]
+                        save_data(db)
+                        st.error(f"Supporter profile '{cur_s['name']}' deleted!")
+                        st.rerun()
 
     # -----------------------------------------------------
     # PLAYER ROLE C: SUPER USER (PLATFORM OWNER)
@@ -491,7 +552,7 @@ else:
         m3.metric("Facility Bookings", len(db["facility_bookings"]))
         m4.metric("Ticket Sales Ledger", len(db["ticket_orders"]))
 
-        tab_inv, tab_logs = st.tabs(["Monthly Portal Invoicing", "System Records"])
+        tab_inv, tab_logs = st.tabs(["Monthly Portal Invoicing", "System Records & Purge"])
 
         with tab_inv:
             st.markdown("##### Issue Monthly Portal Billing Invoice")
@@ -537,8 +598,32 @@ else:
                     st.download_button("Download Official Subscription Invoice PDF", pdf_inv, f"Invoice_{inv_obj['invoice_id']}.pdf", "application/pdf")
 
         with tab_logs:
-            st.markdown("##### Platform Monthly Invoices History")
-            st.dataframe(pd.DataFrame(db["platform_invoices"]), use_container_width=True, hide_index=True)
+            st.markdown("##### Master Invoices History (Manage / Delete)")
+            if db["platform_invoices"]:
+                for idx, inv in enumerate(db["platform_invoices"]):
+                    ci1, ci2, ci3, ci4 = st.columns([3, 2, 2, 1])
+                    ci1.write(f"**{inv['recipient']}** ({inv['period']})")
+                    ci2.write(f"Type: {inv['type']}")
+                    ci3.write(f"BWP {inv['amount']:,.2f}")
+                    if ci4.button("Void / Delete", key=f"del_inv_{inv['invoice_id']}"):
+                        db["platform_invoices"].pop(idx)
+                        save_data(db)
+                        st.warning(f"Deleted Invoice {inv['invoice_id']}")
+                        st.rerun()
+
+            st.divider()
+            st.markdown("##### Master Ticket Orders Ledger (Manage / Delete)")
+            if db["ticket_orders"]:
+                for idx, tkt in enumerate(db["ticket_orders"]):
+                    ct1, ct2, ct3, ct4 = st.columns([3, 2, 2, 1])
+                    ct1.write(f"**{tkt['customer_name']}** ({tkt['event_title']})")
+                    ct2.write(f"Qty: {tkt['quantity']}")
+                    ct3.write(f"BWP {tkt['total_paid']:,.2f}")
+                    if ct4.button("Delete Ticket", key=f"del_tkt_{tkt['ticket_id']}"):
+                        db["ticket_orders"].pop(idx)
+                        save_data(db)
+                        st.warning(f"Deleted Ticket {tkt['ticket_id']}")
+                        st.rerun()
 
     # -----------------------------------------------------
     # PLAYER ROLE D: CUSTOMER MARKETPLACE SEARCH
