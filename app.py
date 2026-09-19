@@ -17,7 +17,7 @@ def load_data():
                 return json.load(f)
         except Exception:
             pass
-    return {"venues": [], "supporters": [], "events": [], "bookings": [], "tickets": []}
+    return {"venues": [], "supporters": [], "events": [], "bookings": [], "tickets": [], "vendor_invoices": []}
 
 def save_data(data):
     with open(DB_FILE, "w") as f:
@@ -45,19 +45,14 @@ def inject_enterprise_styles():
             [data-testid="stSidebar"] p { color: #F1F5F9 !important; }
             
             .invoice-box {
-                background: #FFFFFF; padding: 2.2rem; border-radius: 8px;
+                background: #FFFFFF; padding: 2rem; border-radius: 8px;
                 border: 1px solid #CBD5E1; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            }
-            .ticket-card {
-                background: #FFFFFF; padding: 1.5rem; border-radius: 8px;
-                border-top: 1px solid #E2E8F0; border-right: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.06); margin-bottom: 1rem;
+                font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin-bottom: 1.5rem;
             }
             .profile-card {
                 padding: 1.8rem; border-radius: 8px; color: #FFFFFF !important; margin-bottom: 1.5rem;
             }
-            .badge-verified {
+            .badge-paid {
                 background-color: #059669; color: #FFFFFF; padding: 0.25rem 0.6rem;
                 border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
             }
@@ -97,7 +92,7 @@ DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=2
 # 3. SIDEBAR NAVIGATION
 # ---------------------------------------------------------
 st.sidebar.markdown("## 🏢 ENTERPRISE GATEWAY")
-st.sidebar.caption("Venue Operations, Ticketing & Service Procurement Platform")
+st.sidebar.caption("Venue Operations, Split Ticketing & Vendor Invoicing")
 st.sidebar.divider()
 
 user_role = st.sidebar.radio(
@@ -114,39 +109,31 @@ user_role = st.sidebar.radio(
 st.sidebar.divider()
 with st.sidebar.expander("System Utilities"):
     if st.button("Purge & Reset System Database", type="primary", use_container_width=True):
-        db = {"venues": [], "supporters": [], "events": [], "bookings": [], "tickets": []}
+        db = {"venues": [], "supporters": [], "events": [], "bookings": [], "tickets": [], "vendor_invoices": []}
         save_data(db)
         st.success("Database purged successfully.")
         st.rerun()
 
 # ---------------------------------------------------------
-# 4. MODULE 1: PUBLIC PORTAL (BOOKINGS, TICKETS & INVOICES)
+# 4. MODULE 1: PUBLIC PORTAL (SPLIT INVOICING)
 # ---------------------------------------------------------
 if user_role == "Public Portal (Bookings & Ticketing)":
     st.title("Central Venue Booking & Public Ticketing Console")
-    st.caption("Reserve enterprise facilities, customize vendor packages, and request verified event admission tickets.")
+    st.caption("Reserve enterprise facilities and customize vendor packages with separate billing.")
     st.divider()
 
-    public_tab1, public_tab2 = st.tabs(["Book Venue & Instant Quotation", "Public Event Ticket Shop"])
+    public_tab1, public_tab2 = st.tabs(["Book Venue & Vendor Packages", "Public Event Ticket Shop"])
 
-    # --- TAB A: VENUE BOOKING & BRANDED INVOICE ---
+    # --- TAB A: VENUE & VENDOR BOOKING WITH SEPARATE INVOICES ---
     with public_tab1:
-        st.markdown("### Automated Venue & Services Reservation")
-        st.info("Direct digital booking console. Select your date, hall, and supplier packages to generate an instant quotation.")
+        st.markdown("### Automated Venue & Service Reservation")
 
         venues_list = db.get("venues", [])
         if not venues_list:
             st.warning("No facility profiles are currently published on the gateway.")
         else:
             venue_names = [v.get("name", "Unnamed Facility") for v in venues_list]
-            
-            query_params = st.query_params
-            default_index = 0
-            if "venue_id" in query_params:
-                matched_v = next((i for i, v in enumerate(venues_list) if v.get("venue_id") == query_params["venue_id"]), 0)
-                default_index = matched_v
-
-            sel_v_name = st.selectbox("1. Select Facility / Venue:", venue_names, index=default_index)
+            sel_v_name = st.selectbox("1. Select Facility / Venue:", venue_names)
             sel_venue = next(v for v in venues_list if v.get("name") == sel_v_name)
 
             v_brand_color = sel_venue.get("brand_color", "#0F172A")
@@ -167,7 +154,7 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                         <p style="color: #F1F5F9 !important; margin-top: 10px; font-size: 0.9rem;">
                             <b>Location:</b> {sel_venue.get('address')} | <b>Category:</b> {sel_venue.get('type')}<br>
                             <b>Max Guest Occupancy:</b> {sel_venue.get('max_capacity'):,} Guests<br>
-                            <b>WhatsApp POP Number:</b> {v_whatsapp}
+                            <b>Venue POP WhatsApp Line:</b> {v_whatsapp}
                         </p>
                     </div>
                 """, unsafe_allow_html=True)
@@ -178,14 +165,6 @@ if user_role == "Public Portal (Bookings & Ticketing)":
             else:
                 st.divider()
                 st.markdown("### 2. Select Space & Reserve Date")
-                
-                st.markdown("##### Available Venue Sections / Spaces:")
-                sp_cols = st.columns(min(len(spaces), 4))
-                for idx, sp in enumerate(spaces):
-                    with sp_cols[idx % 4]:
-                        sp_img = sp.get("image_url", SPACE_PRESETS[0])
-                        st.image(sp_img, use_container_width=True)
-                        st.caption(f"**{sp.get('name')}**\n\nCap: {sp.get('capacity')} | BWP {sp.get('daily_rate'):,.2f}/day")
 
                 sp_col1, sp_col2, sp_col3 = st.columns(3)
                 with sp_col1:
@@ -198,46 +177,37 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                     booking_days = st.number_input("Duration (Days)", min_value=1, value=1)
 
                 space_total = sel_space.get("daily_rate", 0) * booking_days
-
-                existing_bookings = db.get("bookings", [])
-                existing_events = db.get("events", [])
                 date_str = str(booking_date)
-                
-                is_customer_locked = any(
+
+                is_locked = any(
                     b.get("venue_id") == sel_venue.get("venue_id") and 
                     b.get("space_name") == sel_sp_name and 
                     b.get("booking_date") == date_str and 
                     b.get("status") in ["Confirmed / Paid", "Pending POP / Verification"]
-                    for b in existing_bookings
+                    for b in db.get("bookings", [])
                 )
 
-                is_facility_event_locked = any(
-                    e.get("venue_id") == sel_venue.get("venue_id") and
-                    (e.get("space_name") == sel_sp_name or e.get("space_name") == "All Spaces / Full Venue") and
-                    e.get("date") == date_str
-                    for e in existing_events
-                )
-
-                if is_customer_locked or is_facility_event_locked:
-                    st.error(f"❌ DATE UNAVAILABLE: '{sel_sp_name}' is ALREADY RESERVED/PENDING on {date_str}. Please choose another date or space.")
+                if is_locked:
+                    st.error(f"❌ DATE UNAVAILABLE: '{sel_sp_name}' is already reserved/pending on {date_str}.")
                 else:
-                    st.success(f"✅ DATE AVAILABLE: '{sel_sp_name}' is open for booking on {date_str}.")
+                    st.success(f"✅ DATE AVAILABLE: '{sel_sp_name}' is open on {date_str}.")
 
                     st.divider()
                     st.markdown("### 3. Add Service Provider Packages (Supporters)")
+                    st.info("💡 Vendor services are billed directly by each independent provider. Separate invoices will be issued.")
 
-                    selected_addons = []
-                    addons_total = 0.0
-
+                    selected_vendor_orders = {}
                     supporters = db.get("supporters", [])
+
                     if supporters:
                         for sup in supporters:
                             templates = sup.get("quotation_templates", [])
-                            sup_color = sup.get("brand_color", "#1E293B")
-                            sup_logo = sup.get("logo_url", DEFAULT_LOGO)
                             if templates:
                                 with st.expander(f"Add Services: {sup.get('business_name')} ({sup.get('category')})"):
-                                    st.image(sup_logo, width=120)
+                                    st.image(sup.get("logo_url", DEFAULT_LOGO), width=100)
+                                    sup_items = []
+                                    sup_total = 0.0
+
                                     for t in templates:
                                         item_key = f"{sup.get('supporter_id')}_{t.get('item_name')}"
                                         qty = st.number_input(
@@ -246,91 +216,93 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                                         )
                                         if qty > 0:
                                             cost = qty * t.get("unit_price")
-                                            addons_total += cost
-                                            selected_addons.append({
-                                                "vendor": sup.get("business_name"),
-                                                "vendor_color": sup_color,
-                                                "item": t.get("item_name"),
+                                            sup_total += cost
+                                            sup_items.append({
+                                                "item_name": t.get("item_name"),
+                                                "unit_type": t.get("unit_type"),
                                                 "qty": qty,
                                                 "unit_price": t.get("unit_price"),
-                                                "total": cost
+                                                "subtotal": cost
                                             })
+                                    if sup_items:
+                                        selected_vendor_orders[sup.get("supporter_id")] = {
+                                            "supporter": sup,
+                                            "items": sup_items,
+                                            "total": sup_total
+                                        }
                     else:
                         st.info("No supplier add-ons currently available.")
 
                     st.divider()
-                    grand_total = space_total + addons_total
+                    st.markdown("### 4. Separate Itemized Invoices / Quotations")
 
-                    st.markdown("### 4. Itemized Quotation & Digital Invoice")
-                    
+                    # INVOICE 1: VENUE OWNER
                     st.markdown(f"""
-                    <div class="invoice-box" style="border-top: 6px solid {v_brand_color};">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div class="invoice-box" style="border-top: 5px solid {v_brand_color};">
+                        <div style="display: flex; justify-content: space-between;">
                             <div>
-                                <img src="{v_logo}" class="logo-img" style="margin-bottom: 10px;">
-                                <h2 style="color: {v_brand_color} !important; margin: 0;">OFFICIAL INVOICE / QUOTATION</h2>
-                                <p style="font-size: 0.85rem; color: #64748B; margin-top: 4px;">
-                                    <b>Issuer:</b> {sel_venue.get('name')}<br>
-                                    <b>Address:</b> {sel_venue.get('address')}<br>
-                                    <b>Tax / Reg ID:</b> {sel_venue.get('tax_id')} | <b>Email:</b> {sel_venue.get('email')}
-                                </p>
+                                <img src="{v_logo}" class="logo-img">
+                                <h3>INVOICE A: VENUE HIRE ({sel_venue.get('name')})</h3>
                             </div>
                             <div style="text-align: right;">
-                                <p style="font-size: 0.85rem; margin: 0;"><b>Invoice Date:</b> {datetime.date.today()}</p>
-                                <p style="font-size: 0.85rem; margin: 0; color: #D97706;"><b>Payment Status:</b> Pending POP Submission</p>
+                                <h4>Total: BWP {space_total:,.2f}</h4>
+                                <p style="color: #D97706; font-weight: bold;">Status: Pending POP Submission</p>
                             </div>
                         </div>
-                        <hr>
-                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 1rem;">
-                            <thead>
-                                <tr style="background-color: #F1F5F9; text-align: left;">
-                                    <th style="padding: 8px;">Item Description</th>
-                                    <th style="padding: 8px;">Qty / Days</th>
-                                    <th style="padding: 8px;">Unit Rate</th>
-                                    <th style="padding: 8px; text-align: right;">Subtotal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td style="padding: 8px;">Venue Hire: {sel_sp_name} ({sel_venue.get('name')})</td>
-                                    <td style="padding: 8px;">{booking_days} day(s)</td>
-                                    <td style="padding: 8px;">BWP {sel_space.get('daily_rate'):,.2f}</td>
-                                    <td style="padding: 8px; text-align: right;">BWP {space_total:,.2f}</td>
-                                </tr>
-                                {"".join([f"<tr><td style='padding:8px;'>[{addon['vendor']}] {addon['item']}</td><td style='padding:8px;'>{addon['qty']}</td><td style='padding:8px;'>BWP {addon['unit_price']:,.2f}</td><td style='padding:8px; text-align:right;'>BWP {addon['total']:,.2f}</td></tr>" for addon in selected_addons])}
-                            </tbody>
-                        </table>
-                        <hr>
-                        <div style="text-align: right;">
-                            <h2 style="color: {v_secondary_color} !important; margin: 0;">Grand Total: BWP {grand_total:,.2f}</h2>
-                        </div>
+                        <p><b>Hire Space:</b> {sel_sp_name} ({booking_days} day/s) @ BWP {sel_space.get('daily_rate'):,.2f}/day</p>
                     </div>
                     """, unsafe_allow_html=True)
 
-                    st.markdown("#### Payment Details & Booking Request")
-                    st.warning(f"⚠️ **POP REQUIREMENT:** Send your Proof of Payment (POP) via WhatsApp to **{v_whatsapp}**. Booking will be confirmed once verified by facility manager.")
+                    # INVOICES 2+: INDIVIDUAL VENDORS
+                    for sup_id, v_data in selected_vendor_orders.items():
+                        sup_info = v_data["supporter"]
+                        s_color = sup_info.get("brand_color", "#1E293B")
+                        s_logo = sup_info.get("logo_url", DEFAULT_LOGO)
 
-                    with st.expander("💳 View Payment Account Details (Deposit / Mobile Money)", expanded=True):
-                        st.write(f"**Bank Payout Account / Details:** {sel_venue.get('bank_details', 'Contact Facility')}")
-                        st.write(f"**Official WhatsApp POP Line:** {v_whatsapp}")
+                        st.markdown(f"""
+                        <div class="invoice-box" style="border-top: 5px solid {s_color};">
+                            <div style="display: flex; justify-content: space-between;">
+                                <div>
+                                    <img src="{s_logo}" class="logo-img">
+                                    <h3>INVOICE: VENDOR SERVICE ({sup_info.get('business_name')})</h3>
+                                    <p style="font-size: 0.85rem; color: #64748B;">Category: {sup_info.get('category')} | WhatsApp: {sup_info.get('phone')}</p>
+                                </div>
+                                <div style="text-align: right;">
+                                    <h4 style="color: {s_color};">Total: BWP {v_data['total']:,.2f}</h4>
+                                    <p style="color: #D97706; font-weight: bold;">Status: Pending Direct POP</p>
+                                </div>
+                            </div>
+                            <table style="width:100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <tr style="background-color: #F8FAFC;">
+                                    <th style="padding: 6px; text-align: left;">Service Item</th>
+                                    <th style="padding: 6px;">Qty</th>
+                                    <th style="padding: 6px;">Rate</th>
+                                    <th style="padding: 6px; text-align: right;">Subtotal</th>
+                                </tr>
+                                {"".join([f"<tr><td style='padding:6px;'>{i['item_name']}</td><td style='padding:6px; text-align:center;'>{i['qty']}</td><td style='padding:6px;'>BWP {i['unit_price']:,.2f}</td><td style='padding:6px; text-align:right;'>BWP {i['subtotal']:,.2f}</td></tr>" for i in v_data['items']])}
+                            </table>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                    with st.form("public_booking_form"):
+                    st.markdown("#### Confirm Booking & Generate Separate POP Requests")
+                    with st.form("split_booking_form"):
                         c_name = st.text_input("Full Name / Company Name*")
                         c_email = st.text_input("Email Address*")
                         c_phone = st.text_input("Phone / WhatsApp Number*")
-                        c_pay_method = st.selectbox("Selected Payment Method", [
+                        c_pay_method = st.selectbox("Preferred Payment Method", [
                             "eWallet / First National Bank",
                             "Orange Money",
                             "Pay2Cell / Absa",
                             "Direct Bank Deposit / Transfer"
                         ])
 
-                        pay_btn = st.form_submit_button("Submit Reservation & Pending POP Request", use_container_width=True)
-
-                        if pay_btn:
+                        if st.form_submit_button("Submit Reservation & Issue Invoices", use_container_width=True):
                             if c_name and c_email and c_phone:
+                                b_id = f"BK-{len(db.get('bookings', []))+1001}"
+                                
+                                # Save Master Venue Booking
                                 new_booking = {
-                                    "booking_id": f"BK-{len(existing_bookings)+1001}",
+                                    "booking_id": b_id,
                                     "venue_id": sel_venue.get("venue_id"),
                                     "venue_name": sel_venue.get("name"),
                                     "space_name": sel_sp_name,
@@ -340,22 +312,42 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                                     "booking_date": date_str,
                                     "days": booking_days,
                                     "venue_cost": space_total,
-                                    "addons_cost": addons_total,
-                                    "grand_total": grand_total,
-                                    "addons_breakdown": selected_addons,
                                     "payment_method": c_pay_method,
                                     "status": "Pending POP / Verification",
                                     "pop_reference": None,
-                                    "created_at": str(datetime.datetime.now())
+                                    "created_at": str(datetime.date.today())
                                 }
                                 db.setdefault("bookings", []).append(new_booking)
+
+                                # Save Individual Vendor Invoices
+                                for sup_id, v_data in selected_vendor_orders.items():
+                                    v_inv_id = f"VINV-{len(db.get('vendor_invoices', []))+5001}"
+                                    sup_info = v_data["supporter"]
+                                    db.setdefault("vendor_invoices", []).append({
+                                        "vendor_invoice_id": v_inv_id,
+                                        "parent_booking_id": b_id,
+                                        "supporter_id": sup_id,
+                                        "supporter_name": sup_info.get("business_name"),
+                                        "venue_name": sel_venue.get("name"),
+                                        "customer_name": c_name,
+                                        "customer_email": c_email,
+                                        "customer_phone": c_phone,
+                                        "event_date": date_str,
+                                        "items": v_data["items"],
+                                        "total_amount": v_data["total"],
+                                        "payment_method": c_pay_method,
+                                        "status": "Pending POP",
+                                        "pop_reference": None,
+                                        "created_at": str(datetime.date.today())
+                                    })
+
                                 save_data(db)
-                                st.success(f"Booking Request Submitted! Please send your POP via WhatsApp to {v_whatsapp}. Reference ID: BK-{len(existing_bookings)+1001}")
+                                st.success(f"Reservation Request #{b_id} Created! Please submit POPs directly to the venue and vendor WhatsApp lines.")
                                 st.rerun()
                             else:
-                                st.error("Please complete mandatory customer details.")
+                                st.error("Please complete all required customer fields.")
 
-    # --- TAB B: BRANDED TICKET SHOP & TICKETS WITH LOGOS ---
+    # --- TAB B: EVENT TICKET SHOP ---
     with public_tab2:
         st.markdown("### Public Event Ticket Shop")
         events = db.get("events", [])
@@ -365,8 +357,6 @@ if user_role == "Public Portal (Bookings & Ticketing)":
             for ev in events:
                 matching_venue = next((v for v in db.get("venues", []) if v.get("venue_id") == ev.get("venue_id")), {})
                 v_logo = matching_venue.get("logo_url", DEFAULT_LOGO)
-                v_primary = matching_venue.get("brand_color", "#0F172A")
-                v_sec = matching_venue.get("brand_secondary", "#2563EB")
                 v_whatsapp = matching_venue.get("whatsapp_no", "Not Specified")
 
                 with st.container():
@@ -375,97 +365,67 @@ if user_role == "Public Portal (Bookings & Ticketing)":
                         st.image(ev.get("flyer_url", SPACE_PRESETS[0]), use_container_width=True)
                     with col_e2:
                         st.markdown(f"### {ev.get('title')}")
-                        st.write(f"<b>Venue:</b> {ev.get('venue_name')} | <b>Space:</b> {ev.get('space_name', 'Full Venue')} | <b>Date:</b> {ev.get('date')}", unsafe_allow_html=True)
-                        st.write(f"{ev.get('description')}")
-                        st.markdown(f"<b>Admission Price:</b> BWP {ev.get('price', 0):,.2f}", unsafe_allow_html=True)
-
-                        with st.expander("💳 Payment Instructions & Accounts"):
-                            st.write(f"**Bank / Mobile Details:** {matching_venue.get('bank_details', 'Contact Facility')}")
-                            st.write(f"**WhatsApp POP Submission Line:** {v_whatsapp}")
+                        st.write(f"<b>Venue:</b> {ev.get('venue_name')} | <b>Date:</b> {ev.get('date')} | <b>Price:</b> BWP {ev.get('price', 0):,.2f}", unsafe_allow_html=True)
+                        st.write(f"<b>WhatsApp POP Submission:</b> {v_whatsapp}", unsafe_allow_html=True)
 
                         with st.form(f"ticket_form_{ev.get('event_id')}"):
                             t_qty = st.number_input("Quantity", min_value=1, value=1)
                             t_buyer = st.text_input("Buyer Full Name*")
                             t_email = st.text_input("Delivery Email*")
-                            t_pay_method = st.selectbox("Payment Method", [
-                                "eWallet / First National Bank",
-                                "Orange Money",
-                                "Pay2Cell / Absa",
-                                "Direct Bank Deposit / Transfer"
-                            ])
+                            t_pay_method = st.selectbox("Payment Method", ["eWallet", "Orange Money", "Pay2Cell", "Direct Bank Deposit"])
                             
-                            buy_t_btn = st.form_submit_button("Request Ticket (Pending POP)")
-                            if buy_t_btn:
+                            if st.form_submit_button("Request Ticket (Pending POP)"):
                                 if t_buyer and t_email:
-                                    tot_t = t_qty * ev.get('price', 0)
-                                    ticket_id = f"TKT-{len(db.get('tickets', []))+10001}"
-                                    raw_hash = f"{ticket_id}-{ev.get('event_id')}-{t_email}-{datetime.datetime.now()}"
-                                    sec_hash = hashlib.sha256(raw_hash.encode()).hexdigest()[:12].upper()
-
-                                    new_ticket = {
-                                        "ticket_id": ticket_id,
+                                    t_id = f"TKT-{len(db.get('tickets', []))+10001}"
+                                    sec_hash = hashlib.sha256(f"{t_id}-{t_email}-{datetime.datetime.now()}".encode()).hexdigest()[:12].upper()
+                                    db.setdefault("tickets", []).append({
+                                        "ticket_id": t_id,
                                         "verification_hash": f"HASH-{sec_hash}",
                                         "event_id": ev.get('event_id'),
                                         "event_title": ev.get('title'),
                                         "venue_name": ev.get('venue_name'),
                                         "venue_id": ev.get('venue_id'),
                                         "venue_logo": v_logo,
-                                        "brand_color": v_primary,
-                                        "brand_secondary": v_sec,
                                         "buyer": t_buyer,
                                         "email": t_email,
                                         "qty": t_qty,
-                                        "total_paid": tot_t,
+                                        "total_paid": t_qty * ev.get('price', 0),
                                         "payment_method": t_pay_method,
                                         "status": "Pending POP / Unverified",
-                                        "pop_reference": None,
-                                        "scanned_at": None
-                                    }
-                                    db.setdefault("tickets", []).append(new_ticket)
+                                        "pop_reference": None
+                                    })
                                     save_data(db)
-
-                                    st.warning(f"Ticket Reserved! Please send Proof of Payment to WhatsApp **{v_whatsapp}** mentioning Ticket ID **{ticket_id}**. The facility owner will verify your POP and release the official pass.")
+                                    st.warning(f"Ticket Reserved! Send Proof of Payment to WhatsApp {v_whatsapp} referencing Ticket ID {t_id}.")
                                 else:
-                                    st.error("Please provide buyer name and email.")
+                                    st.error("Please complete buyer details.")
                     st.divider()
 
 # ---------------------------------------------------------
-# 5. MODULE 2: FACILITY OWNER CONSOLE
+# 5. MODULE 2: FACILITY OWNER CONSOLE & REPORTING
 # ---------------------------------------------------------
 elif user_role == "Facility Owner Console":
-    st.title("Facility Owner Console")
-    st.caption("Configure facility details, upload logos, set WhatsApp POP details, verify POPs, and manage spaces.")
+    st.title("Facility Owner Console & Financial Reports")
+    st.caption("Manage spaces, confirm bookings, verify venue POPs, and view earnings reports.")
     st.divider()
 
     venues = db.get("venues", [])
     if not venues:
         st.info("👋 Welcome! Please complete initial facility registration.")
         with st.form("fac_reg_main"):
-            st.markdown("### Primary Facility Onboarding Profile")
-            col1, col2 = st.columns(2)
-            with col1:
-                f_name = st.text_input("Facility Name*", placeholder="Royal Aria Convention Center")
-                f_type = st.selectbox("Facility Type", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"])
-                f_email = st.text_input("Manager Email*")
-                f_phone = st.text_input("Manager Phone*")
-                f_whatsapp = st.text_input("Company WhatsApp Number for POPs*", placeholder="+267 71 234 567")
-            with col2:
-                f_address = st.text_input("Physical Address*")
-                f_cap = st.number_input("Max Overall Capacity*", value=1000)
-                f_tax = st.text_input("Tax / CIPA Registration ID*")
-                f_bank = st.text_area("Company Bank Account & Payment Details*", placeholder="Bank: FNBB | Acc No: 62000123456 | Branch: Gaborone\nOrange Money: +267 71234567\neWallet: +267 71234567")
+            st.markdown("### Primary Facility Profile Setup")
+            f_name = st.text_input("Facility Name*")
+            f_type = st.selectbox("Type", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"])
+            f_email = st.text_input("Manager Email*")
+            f_phone = st.text_input("Manager Phone*")
+            f_whatsapp = st.text_input("WhatsApp Number for POP Reception*")
+            f_address = st.text_input("Physical Address*")
+            f_cap = st.number_input("Max Capacity", value=1000)
+            f_tax = st.text_input("Tax / CIPA Registration ID*")
+            f_bank = st.text_area("Bank Details & Payment Instructions*")
+            f_logo_file = st.file_uploader("Upload Company Logo", type=["png", "jpg", "jpeg"])
 
-            st.markdown("##### Logo & Corporate Branding")
-            f_logo_file = st.file_uploader("Upload Official Company Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-            
-            bc1, bc2 = st.columns(2)
-            f_brand_color = bc1.color_picker("Primary Brand Color", "#0F172A")
-            f_brand_sec = bc2.color_picker("Accent / Secondary Color", "#2563EB")
-
-            f_img = st.text_input("Cover Image URL", value=SPACE_PRESETS[0])
-            
             if st.form_submit_button("Register Facility Profile"):
-                if f_name and f_email and f_phone and f_address and f_tax and f_whatsapp:
+                if f_name and f_email and f_phone and f_whatsapp:
                     logo_url = process_image_upload(f_logo_file, DEFAULT_LOGO)
                     db.setdefault("venues", []).append({
                         "venue_id": f"v_{len(venues)+101}",
@@ -478,10 +438,10 @@ elif user_role == "Facility Owner Console":
                         "max_capacity": f_cap,
                         "tax_id": f_tax,
                         "bank_details": f_bank,
-                        "brand_color": f_brand_color,
-                        "brand_secondary": f_brand_sec,
+                        "brand_color": "#0F172A",
+                        "brand_secondary": "#2563EB",
                         "logo_url": logo_url,
-                        "flyer_image_url": f_img,
+                        "flyer_image_url": SPACE_PRESETS[0],
                         "spaces": []
                     })
                     save_data(db)
@@ -489,17 +449,15 @@ elif user_role == "Facility Owner Console":
                     st.rerun()
     else:
         cur_v = venues[0]
-        v_color = cur_v.get("brand_color", "#0F172A")
-        v_sec = cur_v.get("brand_secondary", "#2563EB")
         v_logo = cur_v.get("logo_url", DEFAULT_LOGO)
 
         st.markdown(f"""
-            <div class="profile-card" style="background: linear-gradient(135deg, {v_color} 0%, {v_sec} 100%);">
+            <div class="profile-card" style="background: #0F172A;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <h2 style="color: #FFFFFF !important; margin: 0;">🏛️ {cur_v.get('name')}</h2>
-                        <p style="color: #F1F5F9 !important; margin-top: 5px;">
-                            📍 {cur_v.get('address')} | 💬 WhatsApp POP: {cur_v.get('whatsapp_no', 'N/A')} | Tax ID: {cur_v.get('tax_id')}
+                        <p style="color: #CBD5E1 !important; margin-top: 4px;">
+                            📍 {cur_v.get('address')} | 💬 WhatsApp POP: {cur_v.get('whatsapp_no')}
                         </p>
                     </div>
                     <img src="{v_logo}" class="logo-img" style="background: white; padding: 4px; border-radius: 6px;">
@@ -507,254 +465,135 @@ elif user_role == "Facility Owner Console":
             </div>
         """, unsafe_allow_html=True)
 
-        t_spaces, t_brand, t_flyers, t_bookings, t_verify = st.tabs([
-            "Configured Sub-Spaces (Photos & Thumbnails)", 
-            "Logo, Accounts & WhatsApp Setup",
-            "Flyer Builder & Scheduled Events", 
-            "Bookings & Invoices",
-            "✅ POP Verification & Ticket Release"
+        t_spaces, t_brand, t_verify, t_reports = st.tabs([
+            "Configured Sub-Spaces", 
+            "Profile & WhatsApp Setup",
+            "✅ Verify POPs & Confirm Bookings",
+            "📊 Facility Financial Reports"
         ])
 
-        # SUB-SPACES
         with t_spaces:
-            st.markdown("#### Add / Manage Sub-Spaces with Photos")
             with st.form("add_sp"):
-                c1, c2, c3 = st.columns(3)
-                s_name = c1.text_input("Space Name (e.g. Executive Ballroom)")
-                s_cap = c2.number_input("Capacity", value=250)
-                s_rate = c3.number_input("Daily Hire Rate (BWP)", value=3500.0)
-
-                st.markdown("##### Sub-Space Photo:")
-                sp_img_file = st.file_uploader("Upload Sub-Space Photo", type=["png", "jpg", "jpeg"], key="sp_upload")
-                preset_choice = st.selectbox("Or Choose Preset Photo Thumbnail", SPACE_PRESETS)
+                s_name = st.text_input("Sub-Space Name")
+                s_cap = st.number_input("Capacity", value=200)
+                s_rate = st.number_input("Daily Rate (BWP)", value=3000.0)
+                sp_img_file = st.file_uploader("Space Photo", type=["png", "jpg", "jpeg"])
 
                 if st.form_submit_button("Add Hire Space"):
                     if s_name:
-                        final_sp_img = process_image_upload(sp_img_file, preset_choice)
-                        cur_v.setdefault("spaces", []).append({
-                            "name": s_name, 
-                            "capacity": s_cap, 
-                            "daily_rate": s_rate,
-                            "image_url": final_sp_img
-                        })
+                        img_final = process_image_upload(sp_img_file, SPACE_PRESETS[0])
+                        cur_v.setdefault("spaces", []).append({"name": s_name, "capacity": s_cap, "daily_rate": s_rate, "image_url": img_final})
                         save_data(db)
-                        st.success("Sub-space added!")
+                        st.success("Sub-space saved!")
                         st.rerun()
 
             st.divider()
-            st.markdown("##### Existing Sub-Spaces")
-            spaces_list = cur_v.get("spaces", [])
-            if not spaces_list:
-                st.info("No sub-spaces configured.")
-            else:
-                for idx, sp in enumerate(spaces_list):
-                    with st.expander(f"📍 {sp.get('name')} — BWP {sp.get('daily_rate'):,.2f}/day"):
-                        sc1, sc2 = st.columns([1, 2])
-                        with sc1:
-                            st.image(sp.get("image_url", SPACE_PRESETS[0]), use_container_width=True)
-                        with sc2:
-                            with st.form(f"edit_sp_form_{idx}"):
-                                es_name = st.text_input("Space Name", value=sp.get('name'))
-                                es_cap = st.number_input("Capacity", value=int(sp.get('capacity', 0)))
-                                es_rate = st.number_input("Daily Rate (BWP)", value=float(sp.get('daily_rate', 0.0)))
-                                new_sp_file = st.file_uploader("Change Image", type=["png", "jpg", "jpeg"], key=f"sp_edit_{idx}")
-                                
-                                col_btn1, col_btn2 = st.columns(2)
-                                save_edit = col_btn1.form_submit_button("💾 Save Changes")
-                                delete_sp = col_btn2.form_submit_button("🗑️ Delete Space")
+            for sp in cur_v.get("spaces", []):
+                st.write(f"• **{sp.get('name')}** — Capacity: {sp.get('capacity')} | BWP {sp.get('daily_rate'):,.2f}/day")
 
-                                if save_edit:
-                                    img_final = process_image_upload(new_sp_file, sp.get("image_url"))
-                                    spaces_list[idx] = {"name": es_name, "capacity": es_cap, "daily_rate": es_rate, "image_url": img_final}
-                                    save_data(db)
-                                    st.success("Sub-space updated!")
-                                    st.rerun()
-                                if delete_sp:
-                                    spaces_list.pop(idx)
-                                    save_data(db)
-                                    st.warning("Sub-space deleted!")
-                                    st.rerun()
-
-        # LOGO & WhatsApp BRANDING UPDATE
         with t_brand:
-            st.markdown("#### Upload Company Logo, Set Corporate Colors & WhatsApp Number")
-            with st.form("update_brand_form"):
-                new_logo_file = st.file_uploader("Upload New Company Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-                u_whatsapp = st.text_input("Company WhatsApp Line for POP Reception*", value=cur_v.get("whatsapp_no", ""))
-                u_bank = st.text_area("Bank Payout & Payment Account Details*", value=cur_v.get("bank_details", ""))
+            with st.form("update_v_brand"):
+                u_whatsapp = st.text_input("WhatsApp POP Number", value=cur_v.get("whatsapp_no", ""))
+                u_bank = st.text_area("Bank Details", value=cur_v.get("bank_details", ""))
+                u_logo_file = st.file_uploader("Upload New Logo", type=["png", "jpg", "jpeg"])
                 
-                col_b1, col_b2 = st.columns(2)
-                new_p = col_b1.color_picker("Primary Corporate Color", value=cur_v.get("brand_color", "#0F172A"))
-                new_s = col_b2.color_picker("Secondary / Accent Color", value=cur_v.get("brand_secondary", "#2563EB"))
-                
-                if st.form_submit_button("Save Configuration"):
-                    cur_v["brand_color"] = new_p
-                    cur_v["brand_secondary"] = new_s
+                if st.form_submit_button("Save Changes"):
                     cur_v["whatsapp_no"] = u_whatsapp
                     cur_v["bank_details"] = u_bank
-                    if new_logo_file is not None:
-                        cur_v["logo_url"] = process_image_upload(new_logo_file, cur_v.get("logo_url"))
+                    if u_logo_file is not None:
+                        cur_v["logo_url"] = process_image_upload(u_logo_file, cur_v.get("logo_url"))
                     save_data(db)
-                    st.success("Branding and WhatsApp POP details updated!")
+                    st.success("Facility details updated!")
                     st.rerun()
 
-        # FLYER BUILDER WITH LOGOS
-        with t_flyers:
-            st.markdown("#### 🎨 Custom Flyer Builder (Includes Brand Logo)")
+        with t_verify:
+            st.markdown("#### Verify WhatsApp Proofs of Payment")
+            pending_bks = [b for b in db.get("bookings", []) if b.get("venue_id") == cur_v.get("venue_id") and b.get("status") == "Pending POP / Verification"]
             
-            with st.form("flyer_builder_form"):
-                e_title = st.text_input("Event Title*", placeholder="Annual Executive Business Expo")
-                v_spaces_names = ["All Spaces / Full Venue"] + [s.get("name") for s in cur_v.get("spaces", [])]
-                e_space = st.selectbox("Reserve/Lock Venue Space*", v_spaces_names)
-                e_date = st.date_input("Scheduled Event Date*")
-                e_price = st.number_input("Ticket Admission Price (BWP)", value=250.0)
-                e_desc = st.text_area("Event Description")
+            if not pending_bks:
+                st.success("No pending venue booking POPs.")
+            else:
+                for bk in pending_bks:
+                    st.write(f"**Booking {bk.get('booking_id')}** — {bk.get('customer_name')} | Space: {bk.get('space_name')} | BWP {bk.get('venue_cost'):,.2f}")
+                    with st.form(f"v_verify_{bk.get('booking_id')}"):
+                        ref = st.text_input("Enter POP Transaction Reference")
+                        if st.form_submit_button("Confirm Booking"):
+                            if ref:
+                                bk["status"] = "Confirmed / Paid"
+                                bk["pop_reference"] = ref
+                                save_data(db)
+                                st.success(f"Booking {bk.get('booking_id')} confirmed!")
+                                st.rerun()
+                    st.divider()
 
-                st.markdown("##### Poster Image Selection:")
-                uploaded_flyer_file = st.file_uploader("Upload Poster Image (PNG/JPG)", type=["png", "jpg", "jpeg"])
-                preset_flyer = st.selectbox("Or Choose Stock Poster Image", SPACE_PRESETS)
+        # FACILITY FINANCIAL REPORTING
+        with t_reports:
+            st.markdown("#### 📊 Facility Financial Statements & Date Filter")
+            
+            f_col1, f_col2 = st.columns(2)
+            start_date = f_col1.date_input("Report Start Date", datetime.date(2026, 1, 1))
+            end_date = f_col2.date_input("Report End Date", datetime.date.today())
 
-                if st.form_submit_button("Publish Event & Generate Flyer"):
-                    if e_title:
-                        final_flyer = process_image_upload(uploaded_flyer_file, preset_flyer)
-                        ev_id = f"EV-{len(db.get('events', []))+101}"
-                        db.setdefault("events", []).append({
-                            "event_id": ev_id,
-                            "venue_id": cur_v.get("venue_id"),
-                            "venue_name": cur_v.get("name"),
-                            "space_name": e_space,
-                            "title": e_title,
-                            "date": str(e_date),
-                            "price": e_price,
-                            "description": e_desc,
-                            "flyer_url": final_flyer
-                        })
-                        save_data(db)
-                        st.success(f"Event '{e_title}' published!")
-                        st.rerun()
+            v_bookings = [b for b in db.get("bookings", []) if b.get("venue_id") == cur_v.get("venue_id")]
+            
+            filtered_bks = [
+                b for b in v_bookings 
+                if start_date <= datetime.datetime.strptime(b.get("created_at", str(datetime.date.today())), "%Y-%m-%d").date() <= end_date
+            ]
+
+            paid_revenue = sum(b.get("venue_cost", 0) for b in filtered_bks if b.get("status") == "Confirmed / Paid")
+            pending_revenue = sum(b.get("venue_cost", 0) for b in filtered_bks if b.get("status") == "Pending POP / Verification")
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Bookings Requested", len(filtered_bks))
+            m2.metric("Confirmed Revenue (Paid)", f"BWP {paid_revenue:,.2f}")
+            m3.metric("Pending Invoices", f"BWP {pending_revenue:,.2f}")
 
             st.divider()
-            pub_events = [e for e in db.get("events", []) if e.get("venue_id") == cur_v.get("venue_id")]
-            if pub_events:
-                for idx, ev in enumerate(pub_events):
-                    with st.expander(f"📢 {ev.get('title')} ({ev.get('date')})"):
-                        fc1, fc2 = st.columns([1, 2])
-                        with fc1:
-                            st.image(ev.get("flyer_url"), use_container_width=True)
-                        with fc2:
-                            st.write(f"<b>Venue:</b> {ev.get('venue_name')} | <b>Price:</b> BWP {ev.get('price'):,.2f}", unsafe_allow_html=True)
-                            if st.button("Delete Event", key=f"del_ev_{idx}"):
-                                db["events"].remove(ev)
-                                save_data(db)
-                                st.rerun()
-
-        # BOOKINGS LEDGER
-        with t_bookings:
-            st.markdown("#### Confirmed & Pending Date Bookings")
-            bks = [b for b in db.get("bookings", []) if b.get("venue_id") == cur_v.get("venue_id")]
-            if not bks:
-                st.info("No bookings recorded yet.")
+            st.markdown("##### Detailed Invoices Breakdown")
+            if filtered_bks:
+                report_data = []
+                for b in filtered_bks:
+                    report_data.append({
+                        "Invoice / Booking ID": b.get("booking_id"),
+                        "Date Created": b.get("created_at"),
+                        "Customer": b.get("customer_name"),
+                        "Reserved Space": b.get("space_name"),
+                        "Event Date": b.get("booking_date"),
+                        "Amount (BWP)": f"{b.get('venue_cost'):,.2f}",
+                        "Payment Method": b.get("payment_method"),
+                        "Status": b.get("status"),
+                        "POP Ref": b.get("pop_reference", "N/A")
+                    })
+                st.dataframe(report_data, use_container_width=True)
             else:
-                for b in bks:
-                    with st.expander(f"Booking #{b.get('booking_id')} — {b.get('customer_name')} ({b.get('booking_date')})"):
-                        st.write(f"**Space:** {b.get('space_name')} | **Status:** {b.get('status')}")
-                        st.write(f"**Grand Total:** BWP {b.get('grand_total'):,.2f} | **Payment Method:** {b.get('payment_method')}")
-                        st.write(f"**POP Reference:** {b.get('pop_reference', 'Not Verified Yet')}")
-
-        # --- TAB E: POP VERIFICATION & TICKET RELEASE CONSOLE ---
-        with t_verify:
-            st.markdown("#### 🔍 Facility Manager Verification & POP Approval Console")
-            st.caption("Verify POP received on WhatsApp to confirm bookings or release tickets.")
-
-            pop_sub_tab1, pop_sub_tab2 = st.tabs(["Verify Venue Bookings POP", "Verify & Release Event Tickets POP"])
-
-            # 1. VERIFY VENUE BOOKINGS
-            with pop_sub_tab1:
-                pending_bks = [b for b in db.get("bookings", []) if b.get("venue_id") == cur_v.get("venue_id") and b.get("status") == "Pending POP / Verification"]
-                if not pending_bks:
-                    st.success("✅ No pending venue booking POPs awaiting verification.")
-                else:
-                    for bk in pending_bks:
-                        with st.container():
-                            st.markdown(f"##### Booking ID: `{bk.get('booking_id')}` | Client: **{bk.get('customer_name')}**")
-                            st.write(f"**Space:** {bk.get('space_name')} | **Date:** {bk.get('booking_date')} | **Total:** BWP {bk.get('grand_total'):,.2f}")
-                            st.write(f"**Selected Payment:** {bk.get('payment_method')} | **Contact:** {bk.get('customer_phone')} ({bk.get('customer_email')})")
-
-                            with st.form(f"pop_verify_form_bk_{bk.get('booking_id')}"):
-                                pop_ref = st.text_input("Enter Received WhatsApp POP Reference / Txn ID*", placeholder="e.g. TXN-98472938")
-                                verify_bk_btn = st.form_submit_button("✅ Verify POP & Confirm Booking")
-
-                                if verify_bk_btn:
-                                    if pop_ref:
-                                        bk["status"] = "Confirmed / Paid"
-                                        bk["pop_reference"] = pop_ref
-                                        save_data(db)
-                                        st.success(f"Booking #{bk.get('booking_id')} verified and confirmed!")
-                                        st.rerun()
-                                    else:
-                                        st.error("Please enter POP transaction reference.")
-                            st.divider()
-
-            # 2. VERIFY & RELEASE EVENT TICKETS
-            with pop_sub_tab2:
-                pending_tkts = [t for t in db.get("tickets", []) if t.get("venue_id") == cur_v.get("venue_id") and t.get("status") == "Pending POP / Unverified"]
-                if not pending_tkts:
-                    st.success("✅ No pending ticket POPs awaiting verification.")
-                else:
-                    for tkt in pending_tkts:
-                        with st.container():
-                            st.markdown(f"##### Ticket ID: `{tkt.get('ticket_id')}` | Event: **{tkt.get('event_title')}**")
-                            st.write(f"**Buyer:** {tkt.get('buyer')} ({tkt.get('email')}) | **Qty:** {tkt.get('qty')} Guest(s) | **Total:** BWP {tkt.get('total_paid'):,.2f}")
-                            st.write(f"**Payment Method:** {tkt.get('payment_method')}")
-
-                            with st.form(f"pop_verify_form_tkt_{tkt.get('ticket_id')}"):
-                                pop_ref_t = st.text_input("Enter Received WhatsApp POP Reference / Txn ID*", placeholder="e.g. ORG-3920194")
-                                verify_tkt_btn = st.form_submit_button("🎟️ Verify POP & Release Official Ticket")
-
-                                if verify_tkt_btn:
-                                    if pop_ref_t:
-                                        tkt["status"] = "VALID"
-                                        tkt["pop_reference"] = pop_ref_t
-                                        save_data(db)
-                                        st.success(f"Ticket {tkt.get('ticket_id')} verified and officially released!")
-                                        st.rerun()
-                                    else:
-                                        st.error("Please enter POP transaction reference.")
-                            st.divider()
+                st.info("No booking records found for the selected date range.")
 
 # ---------------------------------------------------------
-# 6. MODULE 3: FACILITY SUPPORTER CONSOLE (VENDORS)
+# 6. MODULE 3: FACILITY SUPPORTER CONSOLE (VENDORS) & REPORTS
 # ---------------------------------------------------------
 elif user_role == "Facility Supporter Console (Vendors)":
-    st.title("Facility Supporter Console")
-    st.caption("Manage vendor profile, upload corporate logos, and configure item pricing.")
+    st.title("Facility Supporter Console & Vendor Invoicing")
+    st.caption("Manage vendor profiles, customize logo branding, verify direct customer POPs, and view independent reports.")
     st.divider()
 
     supporters = db.get("supporters", [])
 
-    st.markdown("### 1. Vendor Profile, Logo & Branding")
-    with st.form("supporter_reg_form"):
-        col1, col2 = st.columns(2)
-        s_name = col1.text_input("Business Trading Name*", placeholder="Kalahari Decor & Catering")
-        s_cat = col1.selectbox("Service Category*", [
-            "Catering & Cutlery Hire", 
-            "Stage & Decor Design", 
-            "Florist & Botanical Styling", 
-            "Sound, Lighting & AV", 
-            "Security & VIP Protection"
-        ])
-        s_person = col1.text_input("Contact Person*")
-        s_email = col2.text_input("Contact Email*")
-        s_phone = col2.text_input("Phone / WhatsApp*")
-        s_color = col2.color_picker("Corporate Brand Color", "#1E293B")
+    if not supporters:
+        st.info("👋 Register your business profile to start accepting supplier packages.")
+        with st.form("supporter_reg_form"):
+            s_name = st.text_input("Business Name*", placeholder="Kalahari Decor & Catering")
+            s_cat = st.selectbox("Category*", ["Catering & Cutlery", "Stage & Decor Design", "Sound & AV", "Florist", "Security"])
+            s_person = st.text_input("Contact Person*")
+            s_email = st.text_input("Contact Email*")
+            s_phone = st.text_input("Phone / WhatsApp Line for POP Reception*")
+            s_bank = st.text_area("Company Bank Account & Payment Instructions*")
+            s_color = st.color_picker("Corporate Brand Color", "#1E293B")
+            s_logo_file = st.file_uploader("Upload Company Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
 
-        s_logo_file = st.file_uploader("Upload Vendor Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-
-        if st.form_submit_button("Save Supporter Profile"):
-            if s_name and s_email and s_phone:
-                logo_url = process_image_upload(s_logo_file, DEFAULT_LOGO)
-                existing = next((s for s in supporters if s.get("business_name") == s_name), None)
-                if not existing:
+            if st.form_submit_button("Create Vendor Account"):
+                if s_name and s_email and s_phone and s_bank:
+                    logo_url = process_image_upload(s_logo_file, DEFAULT_LOGO)
                     new_sup = {
                         "supporter_id": f"sup_{len(supporters)+101}",
                         "business_name": s_name,
@@ -762,57 +601,164 @@ elif user_role == "Facility Supporter Console (Vendors)":
                         "contact_person": s_person,
                         "email": s_email,
                         "phone": s_phone,
+                        "bank_details": s_bank,
                         "brand_color": s_color,
                         "logo_url": logo_url,
                         "quotation_templates": []
                     }
                     db.setdefault("supporters", []).append(new_sup)
-                else:
-                    existing["brand_color"] = s_color
-                    if s_logo_file is not None:
-                        existing["logo_url"] = logo_url
-                save_data(db)
-                st.success("Supporter Profile & Logo Saved!")
-                st.rerun()
-
-    if supporters:
-        st.divider()
-        st.markdown("### 2. Configure Quotation Item Templates")
-        sel_sup_name = st.selectbox("Select Active Supporter Account:", [s.get("business_name") for s in supporters])
+                    save_data(db)
+                    st.success("Vendor Profile Created!")
+                    st.rerun()
+    else:
+        sel_sup_name = st.selectbox("Select Active Vendor Account:", [s.get("business_name") for s in supporters])
         cur_sup = next(s for s in supporters if s.get("business_name") == sel_sup_name)
 
-        with st.form("add_template_item_form"):
-            t_col1, t_col2, t_col3 = st.columns(3)
-            i_name = t_col1.text_input("Template Item Name")
-            i_type = t_col2.selectbox("Unit Metric Type", ["Per Head / Guest", "Per Day", "Per Item / Set", "Flat Rate Shift"])
-            i_price = t_col3.number_input("Unit Rate Price (BWP)", min_value=1.0, value=45.0)
+        s_logo = cur_sup.get("logo_url", DEFAULT_LOGO)
+        s_color = cur_sup.get("brand_color", "#1E293B")
 
-            if st.form_submit_button("Add Item Template"):
-                if i_name:
-                    cur_sup.setdefault("quotation_templates", []).append({
-                        "item_name": i_name,
-                        "unit_type": i_type,
-                        "unit_price": i_price
-                    })
+        st.markdown(f"""
+            <div class="profile-card" style="background: {s_color};">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 style="color: #FFFFFF !important; margin: 0;">🚚 {cur_sup.get('business_name')}</h2>
+                        <p style="color: #F1F5F9 !important; margin-top: 4px;">
+                            <b>Category:</b> {cur_sup.get('category')} | <b>WhatsApp POP:</b> {cur_sup.get('phone')}
+                        </p>
+                    </div>
+                    <img src="{s_logo}" class="logo-img" style="background: white; padding: 4px; border-radius: 6px;">
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        v_tab1, v_tab2, v_tab3, v_tab4 = st.tabs([
+            "Service Package Rates", 
+            "Branding & Payment Setup",
+            "✅ Verify Customer POPs", 
+            "📊 Vendor Financial Statements & Reports"
+        ])
+
+        # PACKAGE RATES
+        with v_tab1:
+            st.markdown("#### Quotation Item Templates")
+            with st.form("add_template_item_form"):
+                i_name = st.text_input("Service Item Name", placeholder="Buffet Catering (3-Course)")
+                i_type = st.selectbox("Unit Type", ["Per Guest", "Per Day", "Flat Rate", "Per Item Set"])
+                i_price = st.number_input("Unit Rate Price (BWP)", min_value=1.0, value=150.0)
+
+                if st.form_submit_button("Add Rate Item"):
+                    if i_name:
+                        cur_sup.setdefault("quotation_templates", []).append({
+                            "item_name": i_name,
+                            "unit_type": i_type,
+                            "unit_price": i_price
+                        })
+                        save_data(db)
+                        st.success(f"Added item '{i_name}'")
+                        st.rerun()
+
+            st.divider()
+            for it in cur_sup.get("quotation_templates", []):
+                st.write(f"• **{it.get('item_name')}** — BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})")
+
+        # BRANDING & PAYMENTS
+        with v_tab2:
+            st.markdown("#### Update Branding & Payment Details")
+            with st.form("edit_vendor_profile"):
+                u_phone = st.text_input("WhatsApp Number for POPs", value=cur_sup.get("phone", ""))
+                u_bank = st.text_area("Bank Details", value=cur_sup.get("bank_details", ""))
+                u_color = st.color_picker("Corporate Color", value=cur_sup.get("brand_color", "#1E293B"))
+                u_logo = st.file_uploader("Upload New Logo", type=["png", "jpg", "jpeg"])
+
+                if st.form_submit_button("Save Profile Setup"):
+                    cur_sup["phone"] = u_phone
+                    cur_sup["bank_details"] = u_bank
+                    cur_sup["brand_color"] = u_color
+                    if u_logo is not None:
+                        cur_sup["logo_url"] = process_image_upload(u_logo, cur_sup.get("logo_url"))
                     save_data(db)
-                    st.success(f"Added '{i_name}'!")
+                    st.success("Vendor profile updated!")
                     st.rerun()
 
-        st.divider()
-        items = cur_sup.get("quotation_templates", [])
-        for idx, it in enumerate(items):
-            st.write(f"• **{it.get('item_name')}** — BWP {it.get('unit_price'):,.2f} ({it.get('unit_type')})")
+        # VERIFY CUSTOMER POPS
+        with v_tab3:
+            st.markdown("#### Verify Direct Vendor Invoices & Proofs of Payment")
+            my_invoices = [i for i in db.get("vendor_invoices", []) if i.get("supporter_id") == cur_sup.get("supporter_id") and i.get("status") == "Pending POP"]
+
+            if not my_invoices:
+                st.success("No pending supplier POPs awaiting verification.")
+            else:
+                for inv in my_invoices:
+                    st.write(f"**Vendor Invoice #{inv.get('vendor_invoice_id')}** — Client: {inv.get('customer_name')}")
+                    st.write(f"**Venue:** {inv.get('venue_name')} | **Event Date:** {inv.get('event_date')} | **Total:** BWP {inv.get('total_amount'):,.2f}")
+                    st.write(f"**Client Contact:** {inv.get('customer_phone')} ({inv.get('customer_email')})")
+
+                    with st.form(f"verify_vendor_inv_{inv.get('vendor_invoice_id')}"):
+                        pop_txn = st.text_input("Enter WhatsApp Transaction / POP Reference*")
+                        if st.form_submit_button("✅ Verify Vendor POP & Approve Order"):
+                            if pop_txn:
+                                inv["status"] = "PAID & VERIFIED"
+                                inv["pop_reference"] = pop_txn
+                                save_data(db)
+                                st.success(f"Invoice {inv.get('vendor_invoice_id')} marked as PAID!")
+                                st.rerun()
+                            else:
+                                st.error("Please enter the POP reference number.")
+                    st.divider()
+
+        # VENDOR FINANCIAL REPORTING
+        with v_tab4:
+            st.markdown("#### 📊 Vendor Earnings Statements & Period Filtering")
+
+            v_c1, v_c2 = st.columns(2)
+            v_start = v_c1.date_input("Start Date", datetime.date(2026, 1, 1), key="v_start")
+            v_end = v_c2.date_input("End Date", datetime.date.today(), key="v_end")
+
+            all_v_invs = [i for i in db.get("vendor_invoices", []) if i.get("supporter_id") == cur_sup.get("supporter_id")]
+
+            filtered_v_invs = [
+                i for i in all_v_invs
+                if v_start <= datetime.datetime.strptime(i.get("created_at", str(datetime.date.today())), "%Y-%m-%d").date() <= v_end
+            ]
+
+            paid_tot = sum(i.get("total_amount", 0) for i in filtered_v_invs if i.get("status") == "PAID & VERIFIED")
+            pending_tot = sum(i.get("total_amount", 0) for i in filtered_v_invs if i.get("status") == "Pending POP")
+
+            vm1, vm2, vm3 = st.columns(3)
+            vm1.metric("Total Quotations Issued", len(filtered_v_invs))
+            vm2.metric("Confirmed Payments", f"BWP {paid_tot:,.2f}")
+            vm3.metric("Outstanding Invoices", f"BWP {pending_tot:,.2f}")
+
+            st.divider()
+            st.markdown("##### Vendor Invoices Breakdown")
+            if filtered_v_invs:
+                v_report = []
+                for i in filtered_v_invs:
+                    v_report.append({
+                        "Vendor Inv ID": i.get("vendor_invoice_id"),
+                        "Master Booking ID": i.get("parent_booking_id"),
+                        "Date Created": i.get("created_at"),
+                        "Client": i.get("customer_name"),
+                        "Venue Location": i.get("venue_name"),
+                        "Event Date": i.get("event_date"),
+                        "Total (BWP)": f"{i.get('total_amount'):,.2f}",
+                        "Status": i.get("status"),
+                        "POP Ref": i.get("pop_reference", "N/A")
+                    })
+                st.dataframe(v_report, use_container_width=True)
+            else:
+                st.info("No vendor invoice activity recorded in this date range.")
 
 # ---------------------------------------------------------
 # 7. MODULE 4: TICKET SCANNER & GATE ACCESS
 # ---------------------------------------------------------
 elif user_role == "Ticket Scanner & Gate Access":
-    st.title("Door Gate Ticket Access & Verification Console")
-    st.caption("Scan or enter ticket hashes at event entrances to verify validity.")
+    st.title("Door Gate Ticket Access Console")
+    st.caption("Verify and scan tickets at event entry doors.")
     st.divider()
 
     tickets = db.get("tickets", [])
-    verify_input = st.text_input("Enter Ticket Verification Hash or ID (e.g. HASH-XXXXXX or TKT-10001):")
+    verify_input = st.text_input("Enter Ticket Hash or Ticket ID:")
 
     if st.button("Scan & Verify Ticket", type="primary"):
         if verify_input:
@@ -822,43 +768,25 @@ elif user_role == "Ticket Scanner & Gate Access":
             if matched_tkt:
                 if matched_tkt.get("status") == "VALID":
                     matched_tkt["status"] = "USED / SCANNED"
-                    matched_tkt["scanned_at"] = str(datetime.datetime.now())
                     save_data(db)
-
-                    v_logo = matched_tkt.get("venue_logo", DEFAULT_LOGO)
-
-                    st.markdown(f"""
-                    <div style="background-color: #D1FAE5; border: 2px solid #059669; padding: 1.5rem; border-radius: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2 style="color: #065F46 !important; margin: 0;">✅ ACCESS GRANTED — VALID TICKET</h2>
-                            <img src="{v_logo}" class="logo-img">
-                        </div>
-                        <hr style="border-color: #A7F3D0;">
-                        <p style="color: #064E3B !important;">
-                            <b>Event:</b> {matched_tkt.get('event_title')}<br>
-                            <b>Guest Holder:</b> {matched_tkt.get('buyer')}<br>
-                            <b>Admit Quantity:</b> {matched_tkt.get('qty')} Person(s)<br>
-                            <b>POP Ref:</b> {matched_tkt.get('pop_reference')}<br>
-                            <b>Hash:</b> {matched_tkt.get('verification_hash')}
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.success(f"✅ ACCESS GRANTED: Valid Ticket for {matched_tkt.get('buyer')} ({matched_tkt.get('qty')} person/s).")
                 elif matched_tkt.get("status") == "Pending POP / Unverified":
-                    st.warning("⚠️ UNVERIFIED TICKET: The POP for this ticket has not been verified by the Facility Manager yet.")
+                    st.warning("⚠️ UNVERIFIED TICKET: The POP has not been confirmed by the facility manager yet.")
                 else:
-                    st.error("❌ INVALID / ALREADY REDEEMED: Ticket has already been scanned.")
+                    st.error("❌ INVALID: Ticket has already been used.")
             else:
-                st.error("❌ INVALID TICKET: Verification hash not found.")
+                st.error("❌ Ticket Hash / ID Not Found.")
 
 # ---------------------------------------------------------
 # 8. MODULE 5: PLATFORM ADMIN
 # ---------------------------------------------------------
 elif user_role == "Platform Admin / Master Ledger":
-    st.title("Master Executive Control Panel")
+    st.title("Master Enterprise Platform Control")
     st.divider()
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Facilities", len(db.get("venues", [])))
     m2.metric("Vendors", len(db.get("supporters", [])))
     m3.metric("Bookings", len(db.get("bookings", [])))
-    m4.metric("Tickets", len(db.get("tickets", [])))
+    m4.metric("Vendor Invoices", len(db.get("vendor_invoices", [])))
+    m5.metric("Tickets", len(db.get("tickets", [])))
     st.json(db)
