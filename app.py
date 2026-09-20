@@ -127,34 +127,89 @@ def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=500):
             return fallback_url
     return fallback_url
 
-def generate_branded_flyer(venue_name, event_title, event_date, price, brand_color="#0F172A"):
-    """Generates a dynamic custom-branded event flyer image that doubles as a ticket pass."""
-    width, height = 600, 800
-    img = Image.new("RGB", (width, height), color="#0F172A")
+def generate_branded_flyer(venue_name, event_title, event_date, price, start_time="18:00", end_time="23:00", comments="", uploaded_bg_file=None, brand_color="#0F172A"):
+    """Generates a compact, custom-branded event flyer (400x500) with dynamic backdrop, timing & custom comments."""
+    width, height = 400, 500
+
+    # Handle Backdrop Image
+    if uploaded_bg_file is not None:
+        try:
+            bg_img = Image.open(uploaded_bg_file).convert("RGB")
+            # Resize and center crop
+            bg_ratio = bg_img.width / bg_img.height
+            target_ratio = width / height
+            if bg_ratio > target_ratio:
+                new_width = int(height * bg_ratio)
+                bg_img = bg_img.resize((new_width, height), Image.Resampling.LANCZOS)
+                left = (new_width - width) // 2
+                bg_img = bg_img.crop((left, 0, left + width, height))
+            else:
+                new_height = int(width / bg_ratio)
+                bg_img = bg_img.resize((width, new_height), Image.Resampling.LANCZOS)
+                top = (new_height - height) // 2
+                bg_img = bg_img.crop((0, top, width, top + height))
+            
+            # Apply dark overlay for text readability
+            overlay = Image.new("RGBA", (width, height), (15, 23, 42, 200))
+            img = bg_img.convert("RGBA")
+            img = Image.alpha_composite(img, overlay).convert("RGB")
+        except Exception:
+            img = Image.new("RGB", (width, height), color="#0F172A")
+    else:
+        img = Image.new("RGB", (width, height), color="#0F172A")
+
     draw = ImageDraw.Draw(img)
     
-    draw.rectangle([(0, 0), (width, 140)], fill=brand_color)
-    draw.rectangle([(20, 160), (width-20, height-20)], outline="#D97706", width=3)
+    # Header Banner
+    draw.rectangle([(0, 0), (width, 60)], fill=brand_color)
+    draw.rectangle([(10, 10), (width-10, height-10)], outline="#D97706", width=2)
     
     try:
-        font_title = ImageFont.truetype("arial.ttf", 34)
-        font_sub = ImageFont.truetype("arial.ttf", 22)
-        font_small = ImageFont.truetype("arial.ttf", 16)
+        font_title = ImageFont.truetype("arial.ttf", 20)
+        font_sub = ImageFont.truetype("arial.ttf", 14)
+        font_small = ImageFont.truetype("arial.ttf", 11)
+        font_bold = ImageFont.truetype("arialbd.ttf", 13)
     except IOError:
-        font_title = font_sub = font_small = ImageFont.load_default()
+        font_title = font_sub = font_small = font_bold = ImageFont.load_default()
         
-    draw.text((width//2, 70), venue_name.upper(), fill="#FFFFFF", font=font_sub, anchor="mm")
-    draw.text((width//2, 220), "COME REJUVENATE FROM THE CURRENT CHAOS", fill="#D97706", font=font_small, anchor="mm")
-    draw.text((width//2, 320), event_title, fill="#FFFFFF", font=font_title, anchor="mm")
+    draw.text((width//2, 30), venue_name.upper(), fill="#FFFFFF", font=font_sub, anchor="mm")
+    draw.text((width//2, 90), event_title, fill="#F59E0B", font=font_title, anchor="mm")
     
-    draw.line([(100, 400), (width-100, 400)], fill="#CBD5E1", width=2)
+    draw.line([(40, 120), (width-40, 120)], fill="#CBD5E1", width=1)
     
-    draw.text((width//2, 460), f"DATE: {event_date}", fill="#F8FAFC", font=font_sub, anchor="mm")
-    draw.text((width//2, 530), f"ADMISSION: BWP {price:,.2f}", fill="#10B981", font=font_title, anchor="mm")
-    draw.text((width//2, 720), "OFFICIAL ADMISSION PASS — EXECUTIVE EVENT HUB", fill="#94A3B8", font=font_small, anchor="mm")
+    # Time and Date Block
+    time_str = f"TIME: {start_time} - {end_time}"
+    draw.text((width//2, 145), f"DATE: {event_date}", fill="#F8FAFC", font=font_bold, anchor="mm")
+    draw.text((width//2, 170), time_str, fill="#38BDF8", font=font_bold, anchor="mm")
+    draw.text((width//2, 210), f"ADMISSION: BWP {price:,.2f}", fill="#10B981", font=font_title, anchor="mm")
+    
+    # Custom Comments Box Section
+    if comments:
+        draw.rectangle([(30, 250), (width-30, 390)], fill=(0, 0, 0, 120), outline="#64748B", width=1)
+        draw.text((width//2, 270), "— EVENT DETAILS / NOTES —", fill="#D97706", font=font_small, anchor="mm")
+        
+        # Word Wrap Comments
+        words = comments.split()
+        lines = []
+        current_line = []
+        for word in words:
+            current_line.append(word)
+            if len(" ".join(current_line)) > 35:
+                current_line.pop()
+                lines.append(" ".join(current_line))
+                current_line = [word]
+        if current_line:
+            lines.append(" ".join(current_line))
+            
+        y_offset = 295
+        for line in lines[:4]:  # Max 4 lines display
+            draw.text((width//2, y_offset), line, fill="#E2E8F0", font=font_small, anchor="mm")
+            y_offset += 20
+
+    draw.text((width//2, 465), "OFFICIAL ADMISSION PASS — EXECUTIVE EVENT HUB", fill="#94A3B8", font=font_small, anchor="mm")
     
     buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=80)
+    img.save(buffer, format="JPEG", quality=85)
     b64_str = base64.b64encode(buffer.getvalue()).decode()
     return f"data:image/jpeg;base64,{b64_str}"
 
@@ -540,7 +595,7 @@ if user_role == "Enterprise Marketplace & Event Hub":
             for ev in events:
                 v = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (ev['venue_id'],)).fetchone()
                 col1, col2 = st.columns([1, 2])
-                col1.image(ev['flyer_url'] or SPACE_PRESETS[0], use_container_width=True)
+                col1.image(ev['flyer_url'] or SPACE_PRESETS[0], width=350)
                 col2.markdown(f"<h3 style='font-family: Playfair Display, serif; margin:0;'>{ev['title']}</h3>", unsafe_allow_html=True)
                 col2.write(f"**VENUE:** {ev['venue_name']} | **DATE:** {ev['date']} | **ADMISSION TARIFF:** BWP {ev['price']:,.2f}")
                 
@@ -719,14 +774,37 @@ elif user_role == "Venue Operations & Asset Management":
             col_e1, col_e2 = st.columns(2)
             ev_date = col_e1.date_input("Event Date*", min_value=datetime.date.today(), key="ev_p_date")
             ev_price = col_e2.number_input("Ticket Tariff (BWP)*", min_value=0.0, value=100.0, step=10.0, key="ev_p_price")
-            ev_desc = st.text_area("Event Description / Highlights", key="ev_p_desc")
-            ev_flyer = st.file_uploader("Upload Custom Banner (Optional)", type=["png", "jpg", "jpeg"], key="ev_p_flyer")
+            
+            # Start and End Times
+            t_col1, t_col2 = st.columns(2)
+            ev_start_time = t_col1.time_input("Event Start Time*", value=datetime.time(18, 0), key="ev_p_start")
+            ev_end_time = t_col2.time_input("Event End Time*", value=datetime.time(23, 0), key="ev_p_end")
+
+            # Comments box for flyer details
+            ev_comments = st.text_area("Additional Notes / Comments for Flyer (e.g. VIP Dress Code, Special Guests)", key="ev_p_comments")
+
+            # Flyer Backdrop File Uploader
+            ev_flyer_bg = st.file_uploader("Upload Custom Flyer Background Image", type=["png", "jpg", "jpeg"], key="ev_p_flyer_bg")
             
             st.divider()
-            st.markdown("##### 👁️ Live Flyer Preview (This Flyer IS the Printable Ticket Pass)")
+            st.markdown("##### 👁️ Live Compact Flyer Preview (Backdrop + Timings + Comments)")
+            
+            start_str = ev_start_time.strftime("%H:%M")
+            end_str = ev_end_time.strftime("%H:%M")
+
             if ev_title:
-                preview_flyer = generate_branded_flyer(venue['name'], ev_title, str(ev_date), ev_price, venue['brand_color'] or "#0F172A")
-                st.image(preview_flyer, caption="Live Preview of Branded Flyer / Ticket Pass", width=380)
+                preview_flyer = generate_branded_flyer(
+                    venue_name=venue['name'],
+                    event_title=ev_title,
+                    event_date=str(ev_date),
+                    price=ev_price,
+                    start_time=start_str,
+                    end_time=end_str,
+                    comments=ev_comments,
+                    uploaded_bg_file=ev_flyer_bg,
+                    brand_color=venue['brand_color'] or "#0F172A"
+                )
+                st.image(preview_flyer, caption="Live Preview of Custom Compact Flyer / Ticket Pass", width=350)
             else:
                 st.caption("Type an event title above to view the live generated flyer preview.")
 
@@ -735,17 +813,24 @@ elif user_role == "Venue Operations & Asset Management":
                 if ev_title:
                     ev_id = f"EV-{int(datetime.datetime.now().timestamp())}"
                     
-                    if ev_flyer is not None:
-                        flyer_str = process_compressed_image_upload(ev_flyer, SPACE_PRESETS[0])
-                    else:
-                        flyer_str = generate_branded_flyer(venue['name'], ev_title, str(ev_date), ev_price, venue['brand_color'] or "#0F172A")
+                    flyer_str = generate_branded_flyer(
+                        venue_name=venue['name'],
+                        event_title=ev_title,
+                        event_date=str(ev_date),
+                        price=ev_price,
+                        start_time=start_str,
+                        end_time=end_str,
+                        comments=ev_comments,
+                        uploaded_bg_file=ev_flyer_bg,
+                        brand_color=venue['brand_color'] or "#0F172A"
+                    )
                     
                     conn.execute("""INSERT INTO events 
                         (event_id, venue_id, venue_name, space_name, title, date, price, description, flyer_url, is_active)
                         VALUES (?, ?, ?, 'Main Facility', ?, ?, ?, ?, ?, 1)""",
-                        (ev_id, v_id, venue['name'], ev_title, str(ev_date), ev_price, ev_desc, flyer_str))
+                        (ev_id, v_id, venue['name'], ev_title, str(ev_date), ev_price, ev_comments, flyer_str))
                     conn.commit()
-                    st.success(f"🎉 Event '{ev_title}' has been published with live flyer preview saved!")
+                    st.success(f"🎉 Event '{ev_title}' has been published with dynamic flyer backdrop!")
                     st.rerun()
                 else:
                     st.error("Please enter a title for the event before publishing.")
@@ -761,9 +846,9 @@ elif user_role == "Venue Operations & Asset Management":
                     with st.expander(f"{'🟢 Active' if ev['is_active'] else '🔴 Inactive'} — {ev['title']} ({ev['date']})"):
                         ec1, ec2 = st.columns([1, 3])
                         if ev['flyer_url']:
-                            ec1.image(ev['flyer_url'], use_container_width=True)
+                            ec1.image(ev['flyer_url'], width=220)
                         ec2.write(f"**Ticket Tariff:** BWP {ev['price']:,.2f}")
-                        ec2.write(f"**Description:** {ev['description'] or 'N/A'}")
+                        ec2.write(f"**Notes / Inclusions:** {ev['description'] or 'N/A'}")
                         
                         btn_label = "Deactivate Event" if ev['is_active'] else "Activate Event"
                         if ec2.button(btn_label, key=f"toggle_ev_{ev['event_id']}"):
