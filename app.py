@@ -133,7 +133,6 @@ def generate_branded_flyer(venue_name, event_title, event_date, price, brand_col
     img = Image.new("RGB", (width, height), color="#0F172A")
     draw = ImageDraw.Draw(img)
     
-    # Accent background structure
     draw.rectangle([(0, 0), (width, 140)], fill=brand_color)
     draw.rectangle([(20, 160), (width-20, height-20)], outline="#D97706", width=3)
     
@@ -572,7 +571,6 @@ if user_role == "Enterprise Marketplace & Event Hub":
                             
                             st.warning("⏳ Order Placed! Ticket pass is pending payment verification.")
                             
-                            # Instructions to send POP via WhatsApp
                             wa_num = v['whatsapp_no'] if v and v['whatsapp_no'] else ""
                             st.info(f"👉 **Next Step:** Send your Proof of Payment (POP) along with Order Ref **`{tkt_id}`** via WhatsApp to **+{wa_num}** for verification before your ticket pass is released.")
                             if wa_num:
@@ -724,7 +722,6 @@ elif user_role == "Venue Operations & Asset Management":
             ev_desc = st.text_area("Event Description / Highlights", key="ev_p_desc")
             ev_flyer = st.file_uploader("Upload Custom Banner (Optional)", type=["png", "jpg", "jpeg"], key="ev_p_flyer")
             
-            # --- LIVE FLYER PREVIEW ---
             st.divider()
             st.markdown("##### 👁️ Live Flyer Preview (This Flyer IS the Printable Ticket Pass)")
             if ev_title:
