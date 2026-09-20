@@ -187,16 +187,22 @@ st.set_page_config(page_title="Executive Enterprise Venue & Event Operating Plat
 
 st.markdown("""
     <style>
-        /* Import Executive Fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
         
-        html, body, [class*="css"] {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: #F8FAFC;
+        .stApp {
+            background-color: #F8FAFC !important;
             color: #0F172A;
+            font-family: 'Plus Jakarta Sans', sans-serif;
         }
         
-        /* Executive Header Banners */
+        [data-testid="stSidebar"] {
+            background-color: #0F172A !important;
+            border-right: 1px solid #1E293B;
+        }
+        [data-testid="stSidebar"] * {
+            color: #F8FAFC !important;
+        }
+
         .exec-title {
             font-family: 'Playfair Display', Georgia, serif;
             color: #0F172A;
@@ -210,54 +216,53 @@ st.markdown("""
             font-family: 'Plus Jakarta Sans', sans-serif;
             color: #475569;
             text-align: center;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
 
-        /* Classical Gold Accent Divider */
         .gold-divider {
             height: 2px;
             background: linear-gradient(90deg, transparent, #D97706, transparent);
-            margin: 1rem auto 2rem auto;
-            width: 60%;
+            margin: 0.5rem auto 1.5rem auto;
+            width: 50%;
         }
 
-        /* Elevated Executive Cards */
         .exec-card {
             background-color: #FFFFFF;
-            padding: 1.75rem;
+            padding: 1.5rem;
             border-radius: 4px;
-            border: 1px solid #CBD5E1;
-            border-top: 4px solid #0F172A;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
-            margin-bottom: 1.5rem;
+            border: 1px solid #E2E8F0;
+            border-top: 3px solid #0F172A;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1.25rem;
         }
 
-        .exec-card-gold {
-            background-color: #FFFFFF;
-            padding: 1.75rem;
-            border-radius: 4px;
-            border: 1px solid #CBD5E1;
-            border-top: 4px solid #D97706;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-            margin-bottom: 1.5rem;
-        }
-
-        .logo-img { max-height: 60px; max-width: 180px; object-fit: contain; }
-
-        /* Custom Form Input Headings */
         .form-label {
             font-weight: 700;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: #1E293B;
             margin-bottom: 0.25rem;
         }
 
-        /* Print Media Overrides */
+        .stButton > button {
+            background-color: #0F172A !important;
+            color: #FFFFFF !important;
+            border-radius: 4px !important;
+            border: 1px solid #0F172A !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.05em !important;
+            padding: 0.5rem 1rem !important;
+        }
+        .stButton > button:hover {
+            background-color: #D97706 !important;
+            border-color: #D97706 !important;
+            color: #FFFFFF !important;
+        }
+
         @media print {
             [data-testid="stSidebar"], button, header { display: none !important; }
         }
@@ -285,10 +290,10 @@ user_role = st.sidebar.radio(
         "Vendor Portal & Service Fulfillment",
         "Access Control & Verification Suite",
         "Executive Master Ledger & Audit Suite"
-    ]
+    ],
+    key="nav_sidebar_radio"
 )
 
-# SESSION ISOLATION ON PUBLIC OR UNPROTECTED NAVIGATION
 if user_role in ["Enterprise Marketplace & Event Hub", "Access Control & Verification Suite"]:
     st.session_state["authenticated"] = False
     st.session_state["user_email"] = None
@@ -298,7 +303,7 @@ if user_role in ["Enterprise Marketplace & Event Hub", "Access Control & Verific
 st.sidebar.divider()
 if st.session_state["authenticated"]:
     st.sidebar.success(f"AUTHENTICATED: **{st.session_state['user_email']}**")
-    if st.sidebar.button("LOG OUT WORKSPACE", use_container_width=True):
+    if st.sidebar.button("LOG OUT WORKSPACE", use_container_width=True, key="btn_logout"):
         st.session_state["authenticated"] = False
         st.session_state["user_email"] = None
         st.session_state["user_role"] = None
@@ -306,7 +311,7 @@ if st.session_state["authenticated"]:
         st.rerun()
 
 with st.sidebar.expander("SYSTEM MAINTENANCE"):
-    if st.button("RESET DATABASE STATE", type="primary", use_container_width=True):
+    if st.button("RESET DATABASE STATE", type="primary", use_container_width=True, key="btn_reset_db"):
         if os.path.exists(DB_FILE):
             os.remove(DB_FILE)
             init_db()
@@ -332,7 +337,7 @@ if user_role == "Enterprise Marketplace & Event Hub":
             st.warning("No registered commercial properties published on network.")
         else:
             st.markdown("<div class='form-label'>1. Select Destination Venue Facility</div>", unsafe_allow_html=True)
-            sel_v_name = st.selectbox("", [v['name'] for v in venues], label_visibility="collapsed")
+            sel_v_name = st.selectbox("", [v['name'] for v in venues], label_visibility="collapsed", key="mkt_select_venue")
             sel_venue = next(v for v in venues if v['name'] == sel_v_name)
 
             col1, col2 = st.columns([1, 2])
@@ -362,14 +367,14 @@ if user_role == "Enterprise Marketplace & Event Hub":
                 sc1, sc2, sc3 = st.columns(3)
                 with sc1:
                     st.markdown("<div class='form-label'>Select Sub-Space Asset</div>", unsafe_allow_html=True)
-                    sel_sp_name = st.selectbox("", [s['name'] for s in spaces], label_visibility="collapsed")
+                    sel_sp_name = st.selectbox("", [s['name'] for s in spaces], label_visibility="collapsed", key="mkt_select_space")
                     sel_space = next(s for s in spaces if s['name'] == sel_sp_name)
                 with sc2:
                     st.markdown("<div class='form-label'>Event Date</div>", unsafe_allow_html=True)
-                    booking_date = st.date_input("", min_value=datetime.date.today(), label_visibility="collapsed")
+                    booking_date = st.date_input("", min_value=datetime.date.today(), label_visibility="collapsed", key="mkt_booking_date")
                 with sc3:
                     st.markdown("<div class='form-label'>Reservation Duration (Days)</div>", unsafe_allow_html=True)
-                    booking_days = st.number_input("", min_value=1, value=1, label_visibility="collapsed")
+                    booking_days = st.number_input("", min_value=1, value=1, label_visibility="collapsed", key="mkt_booking_days")
 
                 date_str = str(booking_date)
                 space_cost = sel_space['daily_rate'] * booking_days
@@ -404,7 +409,7 @@ if user_role == "Enterprise Marketplace & Event Hub":
                                         tc2.write(f"Tariff: BWP {t['unit_price']:,.2f} per {t['unit_type']}")
                                         if t['description']: tc2.caption(t['description'])
                                         
-                                        qty = tc2.number_input(f"Qty ({t['item_name']})", min_value=0, value=0, key=f"qty_{sup['supporter_id']}_{t['template_id']}")
+                                        qty = tc2.number_input(f"Qty ({t['item_name']})", min_value=0, value=0, key=f"mkt_qty_{sup['supporter_id']}_{t['template_id']}")
                                         if qty > 0:
                                             cost = qty * t['unit_price']
                                             sup_total += cost
@@ -419,14 +424,14 @@ if user_role == "Enterprise Marketplace & Event Hub":
                         bc1, bc2 = st.columns(2)
                         with bc1:
                             st.markdown("<div class='form-label'>Client Entity / Full Name*</div>", unsafe_allow_html=True)
-                            c_name = st.text_input("", label_visibility="collapsed")
+                            c_name = st.text_input("", label_visibility="collapsed", key="mkt_c_name")
                             st.markdown("<div class='form-label'>Billing Email Address*</div>", unsafe_allow_html=True)
-                            c_email = st.text_input("", label_visibility="collapsed")
+                            c_email = st.text_input("", label_visibility="collapsed", key="mkt_c_email")
                         with bc2:
                             st.markdown("<div class='form-label'>Contact Phone / WhatsApp Line*</div>", unsafe_allow_html=True)
-                            c_phone = st.text_input("", label_visibility="collapsed")
+                            c_phone = st.text_input("", label_visibility="collapsed", key="mkt_c_phone")
                             st.markdown("<div class='form-label'>Preferred Settlement Method</div>", unsafe_allow_html=True)
-                            c_pay = st.selectbox("", ["Direct Bank Wire Transfer", "eWallet", "Orange Money", "Pay2Cell"], label_visibility="collapsed")
+                            c_pay = st.selectbox("", ["Direct Bank Wire Transfer", "eWallet", "Orange Money", "Pay2Cell"], label_visibility="collapsed", key="mkt_c_pay")
 
                         st.markdown("<br>", unsafe_allow_html=True)
                         if st.form_submit_button("SUBMIT RESERVATION & GENERATE INVOICES", type="primary", use_container_width=True):
@@ -465,10 +470,10 @@ if user_role == "Enterprise Marketplace & Event Hub":
                                     [{"item_name": f"Venue Hire ({sel_sp_name})", "qty": booking_days, "unit_price": sel_space['daily_rate'], "subtotal": space_cost}],
                                     space_cost, sel_venue['bank_details']
                                 )
-                                st.download_button("📄 DOWNLOAD VENUE HIRE PDF INVOICE", venue_pdf_bytes, file_name=f"Venue_Invoice_{b_id}.pdf", mime="application/pdf")
+                                st.download_button("📄 DOWNLOAD VENUE HIRE PDF INVOICE", venue_pdf_bytes, file_name=f"Venue_Invoice_{b_id}.pdf", mime="application/pdf", key=f"dl_venue_{b_id}")
 
                                 for v_biz, (v_inv_id, v_pdf_data) in vendor_pdf_dict.items():
-                                    st.download_button(f"📄 DOWNLOAD VENDOR PDF INVOICE ({v_biz.upper()})", v_pdf_data, file_name=f"Vendor_Invoice_{v_inv_id}.pdf", mime="application/pdf")
+                                    st.download_button(f"📄 DOWNLOAD VENDOR PDF INVOICE ({v_biz.upper()})", v_pdf_data, file_name=f"Vendor_Invoice_{v_inv_id}.pdf", mime="application/pdf", key=f"dl_vendor_{v_inv_id}")
                             else:
                                 st.error("Please complete all required billing contact fields.")
         conn.close()
@@ -490,14 +495,14 @@ if user_role == "Enterprise Marketplace & Event Hub":
                     tc1, tc2 = st.columns(2)
                     with tc1:
                         st.markdown("<div class='form-label'>Pass Quantity</div>", unsafe_allow_html=True)
-                        t_qty = st.number_input("", min_value=1, value=1, label_visibility="collapsed")
+                        t_qty = st.number_input("", min_value=1, value=1, label_visibility="collapsed", key=f"tkt_qty_{ev['event_id']}")
                         st.markdown("<div class='form-label'>Attendee Name*</div>", unsafe_allow_html=True)
-                        t_buyer = st.text_input("", label_visibility="collapsed")
+                        t_buyer = st.text_input("", label_visibility="collapsed", key=f"tkt_buyer_{ev['event_id']}")
                     with tc2:
                         st.markdown("<div class='form-label'>Email Address*</div>", unsafe_allow_html=True)
-                        t_email = st.text_input("", label_visibility="collapsed")
+                        t_email = st.text_input("", label_visibility="collapsed", key=f"tkt_email_{ev['event_id']}")
                         st.markdown("<div class='form-label'>Settlement Method</div>", unsafe_allow_html=True)
-                        t_pay = st.selectbox("", ["Direct Bank Wire Transfer", "eWallet", "Orange Money", "Pay2Cell"], label_visibility="collapsed")
+                        t_pay = st.selectbox("", ["Direct Bank Wire Transfer", "eWallet", "Orange Money", "Pay2Cell"], label_visibility="collapsed", key=f"tkt_pay_{ev['event_id']}")
                     
                     if st.form_submit_button("ISSUE DIGITAL TICKET PASS"):
                         if t_buyer and t_email:
@@ -532,11 +537,11 @@ elif user_role == "Venue Operations & Asset Management":
         login_tab, reg_tab = st.tabs(["Operator Workspace Login", "Register New Commercial Property"])
         
         with login_tab:
-            with st.form("fac_login"):
+            with st.form("fac_login_form"):
                 st.markdown("<div class='form-label'>Operator Email Address</div>", unsafe_allow_html=True)
-                l_email = st.text_input("", label_visibility="collapsed")
+                l_email = st.text_input("", label_visibility="collapsed", key="fac_login_email")
                 st.markdown("<div class='form-label'>Account Password</div>", unsafe_allow_html=True)
-                l_pw = st.text_input("", type="password", label_visibility="collapsed")
+                l_pw = st.text_input("", type="password", label_visibility="collapsed", key="fac_login_pw")
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("AUTHENTICATE WORKSPACE", type="primary", use_container_width=True):
                     user = conn.execute("SELECT * FROM users WHERE email = ? AND password_hash = ? AND role = 'Facility Owner'",
@@ -552,30 +557,30 @@ elif user_role == "Venue Operations & Asset Management":
                         st.error("Invalid operator credentials.")
 
         with reg_tab:
-            with st.form("reg_facility_auth"):
+            with st.form("reg_facility_auth_form"):
                 rc1, rc2 = st.columns(2)
                 with rc1:
                     st.markdown("<div class='form-label'>Venue Facility Name*</div>", unsafe_allow_html=True)
-                    f_name = st.text_input("", label_visibility="collapsed")
+                    f_name = st.text_input("", label_visibility="collapsed", key="reg_fac_name")
                     st.markdown("<div class='form-label'>Facility Designation</div>", unsafe_allow_html=True)
-                    f_type = st.selectbox("", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"], label_visibility="collapsed")
+                    f_type = st.selectbox("", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"], label_visibility="collapsed", key="reg_fac_type")
                     st.markdown("<div class='form-label'>Corporate Email*</div>", unsafe_allow_html=True)
-                    f_email = st.text_input("", label_visibility="collapsed")
+                    f_email = st.text_input("", label_visibility="collapsed", key="reg_fac_email")
                     st.markdown("<div class='form-label'>Account Password*</div>", unsafe_allow_html=True)
-                    f_pw = st.text_input("", type="password", label_visibility="collapsed")
+                    f_pw = st.text_input("", type="password", label_visibility="collapsed", key="reg_fac_pw")
                     st.markdown("<div class='form-label'>Direct Telephone Line*</div>", unsafe_allow_html=True)
-                    f_phone = st.text_input("", label_visibility="collapsed")
+                    f_phone = st.text_input("", label_visibility="collapsed", key="reg_fac_phone")
                 with rc2:
                     st.markdown("<div class='form-label'>WhatsApp Audit Verification Line*</div>", unsafe_allow_html=True)
-                    f_whatsapp = st.text_input("", placeholder="26771234567", label_visibility="collapsed")
+                    f_whatsapp = st.text_input("", placeholder="26771234567", label_visibility="collapsed", key="reg_fac_wa")
                     st.markdown("<div class='form-label'>Physical Location / Street Address*</div>", unsafe_allow_html=True)
-                    f_address = st.text_input("", label_visibility="collapsed")
+                    f_address = st.text_input("", label_visibility="collapsed", key="reg_fac_addr")
                     st.markdown("<div class='form-label'>Tax / CIPA Registration Number*</div>", unsafe_allow_html=True)
-                    f_tax = st.text_input("", label_visibility="collapsed")
+                    f_tax = st.text_input("", label_visibility="collapsed", key="reg_fac_tax")
                     st.markdown("<div class='form-label'>Corporate Settlement Instructions*</div>", unsafe_allow_html=True)
-                    f_bank = st.text_area("", label_visibility="collapsed", height=68)
+                    f_bank = st.text_area("", label_visibility="collapsed", height=68, key="reg_fac_bank")
                     st.markdown("<div class='form-label'>Brand Logo</div>", unsafe_allow_html=True)
-                    f_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+                    f_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed", key="reg_fac_logo")
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("REGISTER VENUE PROPERTY", type="primary", use_container_width=True):
@@ -613,16 +618,16 @@ elif user_role == "Venue Operations & Asset Management":
                     sc1, sc2, sc3 = st.columns(3)
                     with sc1:
                         st.markdown("<div class='form-label'>Sub-Space / Hall Identifier</div>", unsafe_allow_html=True)
-                        s_name = st.text_input("", label_visibility="collapsed")
+                        s_name = st.text_input("", label_visibility="collapsed", key="add_sp_name")
                     with sc2:
                         st.markdown("<div class='form-label'>Capacity Rating</div>", unsafe_allow_html=True)
-                        s_cap = st.number_input("", value=250, label_visibility="collapsed")
+                        s_cap = st.number_input("", value=250, label_visibility="collapsed", key="add_sp_cap")
                     with sc3:
                         st.markdown("<div class='form-label'>Standard Daily Tariff (BWP)</div>", unsafe_allow_html=True)
-                        s_rate = st.number_input("", value=2500.0, label_visibility="collapsed")
+                        s_rate = st.number_input("", value=2500.0, label_visibility="collapsed", key="add_sp_rate")
 
                     st.markdown("<div class='form-label'>Asset Media Graphic</div>", unsafe_allow_html=True)
-                    s_img = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+                    s_img = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed", key="add_sp_img")
 
                     if st.form_submit_button("ADD SUB-SPACE ASSET"):
                         if s_name:
@@ -651,7 +656,7 @@ elif user_role == "Venue Operations & Asset Management":
                     with st.form("approve_vendors_form"):
                         new_approved = []
                         for sup in all_supporters:
-                            chk = st.checkbox(f"**{sup['business_name'].upper()}** (`{sup['category']}`)", value=(sup['supporter_id'] in cur_approved))
+                            chk = st.checkbox(f"**{sup['business_name'].upper()}** (`{sup['category']}`)", value=(sup['supporter_id'] in cur_approved), key=f"chk_sup_{sup['supporter_id']}")
                             if chk: new_approved.append(sup['supporter_id'])
                         if st.form_submit_button("SAVE APPROVED SUPPLIER NETWORK"):
                             conn.execute("UPDATE venues SET approved_supporter_ids = ? WHERE venue_id = ?",
@@ -667,9 +672,9 @@ elif user_role == "Venue Operations & Asset Management":
                 else:
                     for bk in pending_bks:
                         st.write(f"**BOOKING REF #{bk['booking_id']}** — Client: {bk['customer_name']} | Total Tariff: BWP {bk['venue_cost']:,.2f}")
-                        with st.form(f"verify_bk_{bk['booking_id']}"):
+                        with st.form(f"verify_bk_form_{bk['booking_id']}"):
                             st.markdown("<div class='form-label'>WhatsApp Transaction Audit Reference</div>", unsafe_allow_html=True)
-                            ref = st.text_input("", label_visibility="collapsed")
+                            ref = st.text_input("", label_visibility="collapsed", key=f"bk_ref_{bk['booking_id']}")
                             if st.form_submit_button("CONFIRM & VERIFY SETTLEMENT"):
                                 if ref:
                                     conn.execute("UPDATE bookings SET status = 'Confirmed / Paid', pop_reference = ? WHERE booking_id = ?", (ref, bk['booking_id']))
@@ -684,9 +689,9 @@ elif user_role == "Venue Operations & Asset Management":
                 else:
                     for tkt in pending_tkts:
                         st.write(f"**TICKET REF #{tkt['ticket_id']}** ({tkt['event_title']}) — Buyer: {tkt['buyer']} | Paid: BWP {tkt['total_paid']:,.2f}")
-                        with st.form(f"verify_tkt_{tkt['ticket_id']}"):
+                        with st.form(f"verify_tkt_form_{tkt['ticket_id']}"):
                             st.markdown("<div class='form-label'>WhatsApp Transaction Audit Reference</div>", unsafe_allow_html=True)
-                            ref = st.text_input("", label_visibility="collapsed")
+                            ref = st.text_input("", label_visibility="collapsed", key=f"tkt_ref_{tkt['ticket_id']}")
                             if st.form_submit_button("ACTIVATE DIGITAL GATE PASS"):
                                 if ref:
                                     conn.execute("UPDATE tickets SET status = 'VALID', pop_reference = ? WHERE ticket_id = ?", (ref, tkt['ticket_id']))
@@ -695,19 +700,19 @@ elif user_role == "Venue Operations & Asset Management":
                                     st.rerun()
 
             with tab_edit:
-                with st.form("edit_facility_profile"):
+                with st.form("edit_facility_profile_form"):
                     st.markdown("<div class='form-label'>Corporate Venue Name</div>", unsafe_allow_html=True)
-                    u_name = st.text_input("", value=cur_v['name'], label_visibility="collapsed")
+                    u_name = st.text_input("", value=cur_v['name'], label_visibility="collapsed", key="edit_fac_name")
                     st.markdown("<div class='form-label'>Telephone Line</div>", unsafe_allow_html=True)
-                    u_phone = st.text_input("", value=cur_v['phone'], label_visibility="collapsed")
+                    u_phone = st.text_input("", value=cur_v['phone'], label_visibility="collapsed", key="edit_fac_phone")
                     st.markdown("<div class='form-label'>WhatsApp Audit Line</div>", unsafe_allow_html=True)
-                    u_wa = st.text_input("", value=cur_v['whatsapp_no'], label_visibility="collapsed")
+                    u_wa = st.text_input("", value=cur_v['whatsapp_no'], label_visibility="collapsed", key="edit_fac_wa")
                     st.markdown("<div class='form-label'>Corporate Settlement Instructions</div>", unsafe_allow_html=True)
-                    u_bank = st.text_area("", value=cur_v['bank_details'], label_visibility="collapsed")
+                    u_bank = st.text_area("", value=cur_v['bank_details'], label_visibility="collapsed", key="edit_fac_bank")
                     st.markdown("<div class='form-label'>Brand Color Theme</div>", unsafe_allow_html=True)
-                    u_color = st.color_picker("", value=cur_v['brand_color'], label_visibility="collapsed")
+                    u_color = st.color_picker("", value=cur_v['brand_color'], label_visibility="collapsed", key="edit_fac_color")
                     st.markdown("<div class='form-label'>Update Corporate Logo</div>", unsafe_allow_html=True)
-                    u_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+                    u_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed", key="edit_fac_logo")
 
                     if st.form_submit_button("SAVE CORPORATE PROFILE"):
                         logo_url = process_compressed_image_upload(u_logo, cur_v['logo_url'])
@@ -735,11 +740,11 @@ elif user_role == "Vendor Portal & Service Fulfillment":
         login_tab, reg_tab = st.tabs(["Vendor Operator Login", "Register Supplier Account"])
         
         with login_tab:
-            with st.form("sup_login"):
+            with st.form("sup_login_form"):
                 st.markdown("<div class='form-label'>Corporate Email Address</div>", unsafe_allow_html=True)
-                l_email = st.text_input("", label_visibility="collapsed")
+                l_email = st.text_input("", label_visibility="collapsed", key="sup_login_email")
                 st.markdown("<div class='form-label'>Account Password</div>", unsafe_allow_html=True)
-                l_pw = st.text_input("", type="password", label_visibility="collapsed")
+                l_pw = st.text_input("", type="password", label_visibility="collapsed", key="sup_login_pw")
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("AUTHENTICATE VENDOR WORKSPACE", type="primary", use_container_width=True):
                     user = conn.execute("SELECT * FROM users WHERE email = ? AND password_hash = ? AND role = 'Facility Supporter'",
@@ -755,25 +760,25 @@ elif user_role == "Vendor Portal & Service Fulfillment":
                         st.error("Invalid vendor credentials.")
 
         with reg_tab:
-            with st.form("reg_supporter_auth"):
+            with st.form("reg_supporter_auth_form"):
                 st.markdown("<div class='form-label'>Trading Entity Name*</div>", unsafe_allow_html=True)
-                s_name = st.text_input("", label_visibility="collapsed")
+                s_name = st.text_input("", label_visibility="collapsed", key="reg_sup_name")
                 st.markdown("<div class='form-label'>Industry Classification</div>", unsafe_allow_html=True)
-                s_cat = st.selectbox("", ["Catering & Cutlery", "Stage & Decor", "Sound & AV", "Florist", "Security Services"], label_visibility="collapsed")
+                s_cat = st.selectbox("", ["Catering & Cutlery", "Stage & Decor", "Sound & AV", "Florist", "Security Services"], label_visibility="collapsed", key="reg_sup_cat")
                 st.markdown("<div class='form-label'>Account Manager / Representative*</div>", unsafe_allow_html=True)
-                s_person = st.text_input("", label_visibility="collapsed")
+                s_person = st.text_input("", label_visibility="collapsed", key="reg_sup_person")
                 st.markdown("<div class='form-label'>Corporate Email*</div>", unsafe_allow_html=True)
-                s_email = st.text_input("", label_visibility="collapsed")
+                s_email = st.text_input("", label_visibility="collapsed", key="reg_sup_email")
                 st.markdown("<div class='form-label'>Account Password*</div>", unsafe_allow_html=True)
-                s_pw = st.text_input("", type="password", label_visibility="collapsed")
+                s_pw = st.text_input("", type="password", label_visibility="collapsed", key="reg_sup_pw")
                 st.markdown("<div class='form-label'>WhatsApp POP Verification Number*</div>", unsafe_allow_html=True)
-                s_phone = st.text_input("", placeholder="26771234567", label_visibility="collapsed")
+                s_phone = st.text_input("", placeholder="26771234567", label_visibility="collapsed", key="reg_sup_phone")
                 st.markdown("<div class='form-label'>Settlement Details*</div>", unsafe_allow_html=True)
-                s_bank = st.text_area("", label_visibility="collapsed")
+                s_bank = st.text_area("", label_visibility="collapsed", key="reg_sup_bank")
                 st.markdown("<div class='form-label'>Brand Color Theme</div>", unsafe_allow_html=True)
-                s_color = st.color_picker("", "#1E293B", label_visibility="collapsed")
+                s_color = st.color_picker("", "#1E293B", label_visibility="collapsed", key="reg_sup_color")
                 st.markdown("<div class='form-label'>Corporate Logo</div>", unsafe_allow_html=True)
-                s_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+                s_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed", key="reg_sup_logo")
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("REGISTER SUPPLIER ACCOUNT", type="primary", use_container_width=True):
@@ -807,15 +812,15 @@ elif user_role == "Vendor Portal & Service Fulfillment":
             with vtab1:
                 with st.form("add_pkg_form"):
                     st.markdown("<div class='form-label'>Service Offering Title*</div>", unsafe_allow_html=True)
-                    i_name = st.text_input("", label_visibility="collapsed")
+                    i_name = st.text_input("", label_visibility="collapsed", key="add_pkg_name")
                     st.markdown("<div class='form-label'>Service Specifications</div>", unsafe_allow_html=True)
-                    i_desc = st.text_area("", label_visibility="collapsed")
+                    i_desc = st.text_area("", label_visibility="collapsed", key="add_pkg_desc")
                     st.markdown("<div class='form-label'>Unit Metric Tariff</div>", unsafe_allow_html=True)
-                    i_type = st.selectbox("", ["Per Guest", "Per Day", "Flat Rate", "Per Hour"], label_visibility="collapsed")
+                    i_type = st.selectbox("", ["Per Guest", "Per Day", "Flat Rate", "Per Hour"], label_visibility="collapsed", key="add_pkg_type")
                     st.markdown("<div class='form-label'>Unit Tariff Price (BWP)</div>", unsafe_allow_html=True)
-                    i_price = st.number_input("", min_value=1.0, value=150.0, label_visibility="collapsed")
+                    i_price = st.number_input("", min_value=1.0, value=150.0, label_visibility="collapsed", key="add_pkg_price")
                     st.markdown("<div class='form-label'>Service Media Graphic</div>", unsafe_allow_html=True)
-                    i_photo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+                    i_photo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed", key="add_pkg_photo")
 
                     if st.form_submit_button("PUBLISH SERVICE OFFERING"):
                         if i_name:
@@ -845,9 +850,9 @@ elif user_role == "Vendor Portal & Service Fulfillment":
                 else:
                     for inv in v_invs:
                         st.write(f"**INVOICE REF #{inv['vendor_invoice_id']}** — Client: {inv['customer_name']} | Amount Due: BWP {inv['total_amount']:,.2f}")
-                        with st.form(f"verify_vinv_{inv['vendor_invoice_id']}"):
+                        with st.form(f"verify_vinv_form_{inv['vendor_invoice_id']}"):
                             st.markdown("<div class='form-label'>WhatsApp Audit Reference</div>", unsafe_allow_html=True)
-                            ref = st.text_input("", label_visibility="collapsed")
+                            ref = st.text_input("", label_visibility="collapsed", key=f"vinv_ref_{inv['vendor_invoice_id']}")
                             if st.form_submit_button("CONFIRM SETTLEMENT"):
                                 if ref:
                                     conn.execute("UPDATE vendor_invoices SET status = 'PAID & VERIFIED', pop_reference = ? WHERE vendor_invoice_id = ?", (ref, inv['vendor_invoice_id']))
@@ -856,15 +861,15 @@ elif user_role == "Vendor Portal & Service Fulfillment":
                                     st.rerun()
 
             with vtab3:
-                with st.form("edit_vendor_profile"):
+                with st.form("edit_vendor_profile_form"):
                     st.markdown("<div class='form-label'>WhatsApp Audit Line</div>", unsafe_allow_html=True)
-                    u_phone = st.text_input("", value=cur_sup['phone'], label_visibility="collapsed")
+                    u_phone = st.text_input("", value=cur_sup['phone'], label_visibility="collapsed", key="edit_sup_phone")
                     st.markdown("<div class='form-label'>Settlement Details</div>", unsafe_allow_html=True)
-                    u_bank = st.text_area("", value=cur_sup['bank_details'], label_visibility="collapsed")
+                    u_bank = st.text_area("", value=cur_sup['bank_details'], label_visibility="collapsed", key="edit_sup_bank")
                     st.markdown("<div class='form-label'>Brand Color Theme</div>", unsafe_allow_html=True)
-                    u_color = st.color_picker("", value=cur_sup['brand_color'], label_visibility="collapsed")
+                    u_color = st.color_picker("", value=cur_sup['brand_color'], label_visibility="collapsed", key="edit_sup_color")
                     st.markdown("<div class='form-label'>Update Corporate Logo</div>", unsafe_allow_html=True)
-                    u_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed")
+                    u_logo = st.file_uploader("", type=["png", "jpg", "jpeg"], label_visibility="collapsed", key="edit_sup_logo")
 
                     if st.form_submit_button("SAVE VENDOR PROFILE"):
                         logo_url = process_compressed_image_upload(u_logo, cur_sup['logo_url'])
@@ -887,13 +892,13 @@ elif user_role == "Access Control & Verification Suite":
     conn = get_db_connection()
     
     st.markdown("<div class='form-label'>Align Digital Pass Barcode within Frame</div>", unsafe_allow_html=True)
-    camera_file = st.camera_input("")
+    camera_file = st.camera_input("", key="access_camera_input")
     
     st.markdown("<div class='form-label'>Or Enter Verification Hash Manually</div>", unsafe_allow_html=True)
-    scan_input = st.text_input("", label_visibility="collapsed")
+    scan_input = st.text_input("", label_visibility="collapsed", key="access_hash_input")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("AUTHENTICATE ADMISSION PASS", type="primary", use_container_width=True):
+    if st.button("AUTHENTICATE ADMISSION PASS", type="primary", use_container_width=True, key="btn_auth_pass"):
         target_str = scan_input.strip().upper()
         if target_str:
             tkt = conn.execute("SELECT * FROM tickets WHERE verification_hash = ? OR ticket_id = ?", (target_str, target_str)).fetchone()
@@ -924,11 +929,11 @@ elif user_role == "Executive Master Ledger & Audit Suite":
     if not st.session_state["authenticated"] or st.session_state["user_role"] != "Platform Admin":
         st.info("🔒 Platform Master Administrator Access Required")
         
-        with st.form("master_admin_login"):
+        with st.form("master_admin_login_form"):
             st.markdown("<div class='form-label'>Master Administrator Email</div>", unsafe_allow_html=True)
-            a_email = st.text_input("", label_visibility="collapsed")
+            a_email = st.text_input("", label_visibility="collapsed", key="admin_email")
             st.markdown("<div class='form-label'>Executive Master Password</div>", unsafe_allow_html=True)
-            a_pw = st.text_input("", type="password", label_visibility="collapsed")
+            a_pw = st.text_input("", type="password", label_visibility="collapsed", key="admin_pw")
             
             st.markdown("<br>", unsafe_allow_html=True)
             if st.form_submit_button("AUTHENTICATE EXECUTIVE ACCESS", type="primary", use_container_width=True):
