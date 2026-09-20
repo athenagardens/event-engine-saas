@@ -8,9 +8,9 @@ import json
 import os
 import io
 
-# ReportLab Engine (In-Memory PDF Generation)
+# ReportLab Engine (In-Memory PDF Generation with Image Support)
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
@@ -95,10 +95,10 @@ def get_db_connection():
     return conn
 
 # ---------------------------------------------------------
-# 2. UTILITIES: SECURITY, DYNAMIC FLYERS, PDF & QR CODES
+# 2. UTILITIES: SECURITY, IMAGES, PDF & QR CODES
 # ---------------------------------------------------------
 DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150"
-SPACE_PRESETS = ["https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=800"]
+SPACE_PRESETS = ["https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=400"]
 
 def hash_pw(password, salt=None):
     if salt is None:
@@ -111,7 +111,8 @@ def verify_pw(password, pwd_hash, salt):
     test_hash, _ = hash_pw(password, salt)
     return test_hash == pwd_hash
 
-def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=800):
+def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=400):
+    """Resizes and compresses images to a lightweight max 400x400 format."""
     if uploaded_file is not None:
         try:
             img = Image.open(uploaded_file)
@@ -120,7 +121,7 @@ def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=800):
                 img = img.convert("RGB")
             
             buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=80, optimize=True)
+            img.save(buffer, format="JPEG", quality=75, optimize=True)
             b64_str = base64.b64encode(buffer.getvalue()).decode()
             return f"data:image/jpeg;base64,{b64_str}"
         except Exception:
@@ -128,27 +129,16 @@ def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=800):
     return fallback_url
 
 def generate_branded_flyer(venue_name, event_title, event_date, price, start_time="18:00", end_time="23:00", comments="", uploaded_bg_file=None, brand_color="#0F172A"):
-    """Generates a high-definition, highly legible event flyer (800x1000) with dynamic background and scaled text."""
-    width, height = 800, 1000
+    """Generates a compact, clear event flyer canvas scaled to 400x500."""
+    width, height = 400, 500
 
     if uploaded_bg_file is not None:
         try:
             bg_img = Image.open(uploaded_bg_file).convert("RGB")
-            bg_ratio = bg_img.width / bg_img.height
-            target_ratio = width / height
-            if bg_ratio > target_ratio:
-                new_width = int(height * bg_ratio)
-                bg_img = bg_img.resize((new_width, height), Image.Resampling.LANCZOS)
-                left = (new_width - width) // 2
-                bg_img = bg_img.crop((left, 0, left + width, height))
-            else:
-                new_height = int(width / bg_ratio)
-                bg_img = bg_img.resize((width, new_height), Image.Resampling.LANCZOS)
-                top = (new_height - height) // 2
-                bg_img = bg_img.crop((0, top, width, top + height))
+            bg_img.thumbnail((width, height))
             
             overlay = Image.new("RGBA", (width, height), (15, 23, 42, 215))
-            img = bg_img.convert("RGBA")
+            img = bg_img.convert("RGBA").resize((width, height))
             img = Image.alpha_composite(img, overlay).convert("RGB")
         except Exception:
             img = Image.new("RGB", (width, height), color="#0F172A")
@@ -157,61 +147,56 @@ def generate_branded_flyer(venue_name, event_title, event_date, price, start_tim
 
     draw = ImageDraw.Draw(img)
     
-    # Outer Border & Header Banner
-    draw.rectangle([(0, 0), (width, 110)], fill=brand_color)
-    draw.rectangle([(16, 16), (width-16, height-16)], outline="#D97706", width=4)
+    draw.rectangle([(0, 0), (width, 60)], fill=brand_color)
+    draw.rectangle([(8, 8), (width-8, height-8)], outline="#D97706", width=2)
     
     try:
-        font_header = ImageFont.truetype("arial.ttf", 32)
-        font_title = ImageFont.truetype("arialbd.ttf", 44)
-        font_sub = ImageFont.truetype("arialbd.ttf", 26)
-        font_body = ImageFont.truetype("arial.ttf", 22)
-        font_small = ImageFont.truetype("arial.ttf", 18)
+        font_header = ImageFont.truetype("arial.ttf", 18)
+        font_title = ImageFont.truetype("arialbd.ttf", 22)
+        font_sub = ImageFont.truetype("arialbd.ttf", 14)
+        font_body = ImageFont.truetype("arial.ttf", 12)
+        font_small = ImageFont.truetype("arial.ttf", 10)
     except IOError:
         font_header = font_title = font_sub = font_body = font_small = ImageFont.load_default()
         
-    draw.text((width//2, 55), venue_name.upper(), fill="#FFFFFF", font=font_header, anchor="mm")
+    draw.text((width//2, 30), venue_name.upper(), fill="#FFFFFF", font=font_header, anchor="mm")
+    draw.text((width//2, 90), event_title, fill="#F59E0B", font=font_title, anchor="mm")
+    draw.line([(40, 115), (width-40, 115)], fill="#CBD5E1", width=1)
     
-    # Main Title
-    draw.text((width//2, 170), event_title, fill="#F59E0B", font=font_title, anchor="mm")
-    draw.line([(80, 220), (width-80, 220)], fill="#CBD5E1", width=2)
+    draw.text((width//2, 140), f"DATE: {event_date}", fill="#FFFFFF", font=font_sub, anchor="mm")
+    draw.text((width//2, 165), f"TIME: {start_time} - {end_time}", fill="#38BDF8", font=font_sub, anchor="mm")
+    draw.text((width//2, 210), f"ADMISSION: BWP {price:,.2f}", fill="#10B981", font=font_title, anchor="mm")
     
-    # Timing & Pricing Details
-    draw.text((width//2, 270), f"DATE: {event_date}", fill="#FFFFFF", font=font_sub, anchor="mm")
-    draw.text((width//2, 320), f"TIME: {start_time} - {end_time}", fill="#38BDF8", font=font_sub, anchor="mm")
-    draw.text((width//2, 400), f"ADMISSION: BWP {price:,.2f}", fill="#10B981", font=font_title, anchor="mm")
-    
-    # Additional Notes / Inclusions
     if comments:
-        draw.rectangle([(60, 470), (width-60, 840)], fill=(0, 0, 0, 150), outline="#D97706", width=2)
-        draw.text((width//2, 510), "— EVENT DETAILS & NOTES —", fill="#D97706", font=font_sub, anchor="mm")
+        draw.rectangle([(30, 240), (width-30, 430)], fill=(0, 0, 0, 150), outline="#D97706", width=1)
+        draw.text((width//2, 260), "— EVENT DETAILS —", fill="#D97706", font=font_sub, anchor="mm")
         
         words = comments.split()
         lines = []
         current_line = []
         for word in words:
             current_line.append(word)
-            if len(" ".join(current_line)) > 42:
+            if len(" ".join(current_line)) > 35:
                 current_line.pop()
                 lines.append(" ".join(current_line))
                 current_line = [word]
         if current_line:
             lines.append(" ".join(current_line))
             
-        y_offset = 560
-        for line in lines[:8]:
+        y_offset = 290
+        for line in lines[:5]:
             draw.text((width//2, y_offset), line, fill="#F8FAFC", font=font_body, anchor="mm")
-            y_offset += 35
+            y_offset += 20
 
-    draw.text((width//2, 940), "OFFICIAL ADMISSION PASS — EXECUTIVE EVENT HUB", fill="#94A3B8", font=font_small, anchor="mm")
+    draw.text((width//2, 475), "OFFICIAL ADMISSION PASS — EXECUTIVE EVENT HUB", fill="#94A3B8", font=font_small, anchor="mm")
     
     buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=90)
+    img.save(buffer, format="JPEG", quality=80)
     b64_str = base64.b64encode(buffer.getvalue()).decode()
     return f"data:image/jpeg;base64,{b64_str}"
 
 def generate_qr_code_base64(data_string):
-    qr = qrcode.QRCode(version=1, box_size=8, border=2)
+    qr = qrcode.QRCode(version=1, box_size=6, border=2)
     qr.add_data(data_string)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white")
@@ -220,18 +205,35 @@ def generate_qr_code_base64(data_string):
     img.save(buffered, format="PNG")
     return f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode()}"
 
-def generate_in_memory_pdf_bytes(title_text, inv_id, created_at, entity_name, tax_id, client_name, client_email, items_list, total_amount, bank_details):
+def generate_in_memory_pdf_bytes(title_text, inv_id, created_at, entity_name, tax_id, client_name, client_email, items_list, total_amount, bank_details, logo_b64=None):
+    """Generates official lightweight PDF invoices embedded with entity branding logos."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     story = []
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#0F172A'), alignment=1)
+    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#0F172A'), alignment=0)
     body_style = ParagraphStyle('DocBody', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#1E293B'))
     header_cell_style = ParagraphStyle('HeaderCell', parent=styles['Normal'], fontSize=9, leading=11, textColor=colors.white, fontName='Helvetica-Bold')
 
-    story.append(Paragraph(f"{title_text.upper()}", title_style))
-    story.append(Spacer(1, 10))
+    # Brand Logo Header Section
+    logo_flowable = None
+    if logo_b64 and "base64," in logo_b64:
+        try:
+            base64_data = logo_b64.split("base64,")[1]
+            img_data = base64.b64decode(base64_data)
+            img_buffer = io.BytesIO(img_data)
+            logo_flowable = RLImage(img_buffer, width=60, height=60)
+        except Exception:
+            logo_flowable = None
+
+    header_table_data = [
+        [logo_flowable if logo_flowable else "", Paragraph(f"<b>{title_text.upper()}</b><br/><font size=8 color='#64748B'>{entity_name}</font>", title_style)]
+    ]
+    t_header = Table(header_table_data, colWidths=[70, 470])
+    t_header.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+    story.append(t_header)
+    story.append(Spacer(1, 15))
 
     meta_data = [
         [Paragraph(f"<b>Document Ref:</b> {inv_id}", body_style), Paragraph(f"<b>Date:</b> {created_at}", body_style)],
@@ -336,19 +338,28 @@ st.markdown("""
 
         .exec-card {
             background-color: #FFFFFF;
-            padding: 1.5rem;
+            padding: 1.25rem;
             border-radius: 4px;
             border: 1px solid #E2E8F0;
             border-top: 3px solid #0F172A;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            margin-bottom: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .metric-card {
+            background-color: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-left: 4px solid #D97706;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
         }
 
         .ticket-pass {
             background: #FFFFFF;
             border: 2px dashed #0F172A;
             border-radius: 8px;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
         }
@@ -400,7 +411,7 @@ user_role = st.sidebar.radio(
     "MANAGEMENT CONSOLE:",
     [
         "Enterprise Marketplace & Event Hub",
-        "Venue Operations & Asset Management",
+        "Venue Operations & Analytics Console",
         "Vendor Portal & Service Fulfillment",
         "Access Control & Verification Suite",
         "Executive Master Ledger & Audit Suite"
@@ -460,7 +471,7 @@ if user_role == "Enterprise Marketplace & Event Hub":
                 <div class="exec-card" style="border-top-color:{sel_venue['brand_color']}; margin-bottom:0;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h2 style="margin:0; font-family:'Playfair Display', serif;">{sel_venue['name']}</h2>
-                        <img src="{sel_venue['logo_url'] or DEFAULT_LOGO}" class="logo-img" style="background:white; padding:4px; border:1px solid #E2E8F0; border-radius:4px; height: 50px;">
+                        <img src="{sel_venue['logo_url'] or DEFAULT_LOGO}" style="background:white; padding:4px; border:1px solid #E2E8F0; border-radius:4px; height: 50px;">
                     </div>
                     <hr style="margin:1rem 0; border:0; border-top:1px solid #E2E8F0;">
                     <p style="margin:0; font-size:0.9rem;">
@@ -570,7 +581,8 @@ if user_role == "Enterprise Marketplace & Event Hub":
                                     v_pdf = generate_in_memory_pdf_bytes(
                                         f"Vendor Invoice — {v_info['business_name']}",
                                         v_inv_id, created_date, v_info['business_name'], "TAX-PENDING",
-                                        c_name, c_email, v_data['items'], v_data['total'], v_info['bank_details']
+                                        c_name, c_email, v_data['items'], v_data['total'], v_info['bank_details'],
+                                        logo_b64=v_info['logo_url']
                                     )
                                     vendor_pdf_dict[v_info['business_name']] = (v_inv_id, v_pdf)
 
@@ -582,7 +594,8 @@ if user_role == "Enterprise Marketplace & Event Hub":
                                     b_id, created_date, sel_venue['name'], sel_venue['tax_id'],
                                     c_name, c_email,
                                     [{"item_name": f"Venue Hire ({sel_sp_name})", "qty": booking_days, "unit_price": sel_space['daily_rate'], "subtotal": space_cost}],
-                                    space_cost, sel_venue['bank_details']
+                                    space_cost, sel_venue['bank_details'],
+                                    logo_b64=sel_venue['logo_url']
                                 )
                                 st.download_button("📄 DOWNLOAD VENUE HIRE PDF INVOICE", venue_pdf_bytes, file_name=f"Venue_Invoice_{b_id}.pdf", mime="application/pdf", key=f"dl_venue_{b_id}")
 
@@ -640,7 +653,6 @@ if user_role == "Enterprise Marketplace & Event Hub":
                             st.error("Please enter required attendee details.")
         conn.close()
 
-    # DYNAMIC TICKET PASS VIEWER
     with tab_my_passes:
         st.markdown("##### Lookup & Print Your Verified Event Ticket Passes")
         lookup_ref = st.text_input("Enter Order Ref or Email Address to View Released Ticket Pass:", placeholder="e.g. TKT-1700000000 or email@domain.com")
@@ -675,7 +687,7 @@ if user_role == "Enterprise Marketplace & Event Hub":
                                         <p style="margin:4px 0; font-family:monospace; color:#D97706;"><b>SECURITY HASH:</b> {tkt['verification_hash']}</p>
                                     </div>
                                     <div>
-                                        <img src="{qr_b64}" style="width:140px; height:140px; border:1px solid #CBD5E1; padding:4px; border-radius:4px;">
+                                        <img src="{qr_b64}" style="width:120px; height:120px; border:1px solid #CBD5E1; padding:4px; border-radius:4px;">
                                     </div>
                                 </div>
                             </div>
@@ -686,11 +698,11 @@ if user_role == "Enterprise Marketplace & Event Hub":
             conn.close()
 
 # ---------------------------------------------------------
-# 6. MODULE 2: VENUE OPERATIONS & ASSET MANAGEMENT
+# 6. MODULE 2: VENUE OPERATIONS & ANALYTICS CONSOLE
 # ---------------------------------------------------------
-elif user_role == "Venue Operations & Asset Management":
-    st.markdown("<div class='exec-title'>Venue Operations & Asset Management Console</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Corporate Facility & Sub-Space Infrastructure</div>", unsafe_allow_html=True)
+elif user_role == "Venue Operations & Analytics Console":
+    st.markdown("<div class='exec-title'>Venue Operations & Analytics Console</div>", unsafe_allow_html=True)
+    st.markdown("<div class='exec-subtitle'>Corporate Facility, Real-Time Statistics & Sub-Space Asset Suite</div>", unsafe_allow_html=True)
     st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
     
     conn = get_db_connection()
@@ -753,7 +765,7 @@ elif user_role == "Venue Operations & Asset Management":
                         v_id = f"VEN-{int(datetime.datetime.now().timestamp())}"
                         pw_hash, salt = hash_pw(f_pw)
                         
-                        logo_str = process_compressed_image_upload(logo_file, DEFAULT_LOGO)
+                        logo_str = process_compressed_image_upload(logo_file, DEFAULT_LOGO, max_dim=400)
 
                         try:
                             conn.execute("INSERT INTO users VALUES (?, ?, ?, ?, 'Facility Owner', ?)",
@@ -773,7 +785,27 @@ elif user_role == "Venue Operations & Asset Management":
         venue = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (v_id,)).fetchone()
         
         st.subheader(f"Workspace: {venue['name']}")
-        tab_subspaces, tab_supp, tab_events, tab_owner_pop = st.tabs(["🏛️ Sub-Space Inventory", "🤝 Vendor Approvals", "🎟️ Public Events Management", "📲 WhatsApp POP Verification"])
+
+        # ------------------- OPERATIONAL STATS & KPI DASHBOARD -------------------
+        st.markdown("##### 📊 Venue Operational Performance & Booking Statistics")
+        v_bookings = conn.execute("SELECT * FROM bookings WHERE venue_id = ?", (v_id,)).fetchall()
+        v_tickets = conn.execute("SELECT * FROM tickets WHERE venue_id = ?", (v_id,)).fetchall()
+        
+        tot_venue_rev = sum(b['venue_cost'] for b in v_bookings if 'Cancelled' not in b['status'])
+        tot_tkt_rev = sum(t['total_paid'] for t in v_tickets if 'Cancelled' not in t['status'])
+        active_bk_cnt = len([b for b in v_bookings if 'Cancelled' not in b['status']])
+        tkt_sold_cnt = sum(t['qty'] for t in v_tickets if 'Cancelled' not in t['status'])
+
+        m1, m2, m3, m4 = st.columns(4)
+        m1.markdown(f"<div class='metric-card'><small>Total Venue Revenue</small><h3>BWP {tot_venue_rev:,.2f}</h3></div>", unsafe_allow_html=True)
+        m2.markdown(f"<div class='metric-card'><small>Active Space Bookings</small><h3>{active_bk_cnt}</h3></div>", unsafe_allow_html=True)
+        m3.markdown(f"<div class='metric-card'><small>Box Office Revenue</small><h3>BWP {tot_tkt_rev:,.2f}</h3></div>", unsafe_allow_html=True)
+        m4.markdown(f"<div class='metric-card'><small>Total Tickets Sold</small><h3>{tkt_sold_cnt}</h3></div>", unsafe_allow_html=True)
+        st.divider()
+
+        tab_subspaces, tab_supp, tab_events, tab_owner_pop, tab_reports = st.tabs([
+            "🏛️ Sub-Space Inventory", "🤝 Vendor Approvals", "🎟️ Public Events", "📲 WhatsApp POP Verification", "📈 Detailed Booking Ledger"
+        ])
         
         with tab_subspaces:
             with st.form("add_space_form"):
@@ -786,7 +818,7 @@ elif user_role == "Venue Operations & Asset Management":
                 
                 if st.form_submit_button("ADD SUB-SPACE TO INVENTORY"):
                     if sp_name:
-                        img_str = process_compressed_image_upload(sp_img, SPACE_PRESETS[0])
+                        img_str = process_compressed_image_upload(sp_img, SPACE_PRESETS[0], max_dim=400)
                         conn.execute("INSERT INTO spaces (venue_id, name, capacity, daily_rate, image_url) VALUES (?, ?, ?, ?, ?)",
                                      (v_id, sp_name, sp_cap, sp_rate, img_str))
                         conn.commit()
@@ -829,12 +861,11 @@ elif user_role == "Venue Operations & Asset Management":
             ev_start_time = t_col1.time_input("Event Start Time*", value=datetime.time(18, 0), key="ev_p_start")
             ev_end_time = t_col2.time_input("Event End Time*", value=datetime.time(23, 0), key="ev_p_end")
 
-            ev_comments = st.text_area("Additional Notes / Comments for Flyer (e.g. VIP Dress Code, Special Guests)", key="ev_p_comments")
-
+            ev_comments = st.text_area("Additional Notes / Comments for Flyer", key="ev_p_comments")
             ev_flyer_bg = st.file_uploader("Upload Custom Flyer Background Image", type=["png", "jpg", "jpeg"], key="ev_p_flyer_bg")
             
             st.divider()
-            st.markdown("##### 👁️ Live High-Resolution Dynamic Flyer Preview")
+            st.markdown("##### 👁️ Live Flyer Preview")
             
             start_str = ev_start_time.strftime("%H:%M")
             end_str = ev_end_time.strftime("%H:%M")
@@ -851,7 +882,7 @@ elif user_role == "Venue Operations & Asset Management":
                     uploaded_bg_file=ev_flyer_bg,
                     brand_color=venue['brand_color'] or "#0F172A"
                 )
-                st.image(preview_flyer, caption="Live High-Res Preview of Branded Flyer Pass", use_container_width=True)
+                st.image(preview_flyer, caption="Live Preview of Branded Flyer Pass", width=300)
             else:
                 st.caption("Type an event title above to view the live generated flyer preview.")
 
@@ -877,7 +908,7 @@ elif user_role == "Venue Operations & Asset Management":
                         VALUES (?, ?, ?, 'Main Facility', ?, ?, ?, ?, ?, 1)""",
                         (ev_id, v_id, venue['name'], ev_title, str(ev_date), ev_price, ev_comments, flyer_str))
                     conn.commit()
-                    st.success(f"🎉 Event '{ev_title}' has been published with high-res dynamic flyer background!")
+                    st.success(f"🎉 Event '{ev_title}' published successfully!")
                     st.rerun()
                 else:
                     st.error("Please enter a title for the event before publishing.")
@@ -893,9 +924,9 @@ elif user_role == "Venue Operations & Asset Management":
                     with st.expander(f"{'🟢 Active' if ev['is_active'] else '🔴 Inactive'} — {ev['title']} ({ev['date']})"):
                         ec1, ec2 = st.columns([1, 2])
                         if ev['flyer_url']:
-                            ec1.image(ev['flyer_url'], use_container_width=True)
+                            ec1.image(ev['flyer_url'], width=150)
                         ec2.write(f"**Ticket Tariff:** BWP {ev['price']:,.2f}")
-                        ec2.write(f"**Notes / Inclusions:** {ev['description'] or 'N/A'}")
+                        ec2.write(f"**Notes:** {ev['description'] or 'N/A'}")
                         
                         btn_label = "Deactivate Event" if ev['is_active'] else "Activate Event"
                         if ec2.button(btn_label, key=f"toggle_ev_{ev['event_id']}"):
@@ -904,7 +935,6 @@ elif user_role == "Venue Operations & Asset Management":
                             conn.commit()
                             st.rerun()
 
-        # EVENT OWNER POP CAPTURE & TICKET RELEASE TAB
         with tab_owner_pop:
             st.markdown("##### Capture Received WhatsApp POP & Release Ticket Passes")
             
@@ -946,7 +976,7 @@ elif user_role == "Venue Operations & Asset Management":
                                     WHERE ticket_id = ?
                                 """, (final_ref, t['ticket_id']))
                                 conn.commit()
-                                st.success(f"🎟️ Ticket Pass #{t['ticket_id']} for {t['buyer']} has been RELEASED!")
+                                st.success(f"🎟️ Ticket Pass #{t['ticket_id']} for {t['buyer']} RELEASED!")
                                 st.rerun()
 
                 if released_tkts:
@@ -969,10 +999,28 @@ elif user_role == "Venue Operations & Asset Management":
                                             <p style="margin:2px 0;"><b>POP REF:</b> {rt['pop_reference']}</p>
                                             <p style="margin:2px 0; font-family:monospace; color:#D97706;"><b>HASH:</b> {rt['verification_hash']}</p>
                                         </div>
-                                        <img src="{qr_b64}" style="width:100px; height:100px;">
+                                        <img src="{qr_b64}" style="width:90px; height:90px;">
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
+
+        with tab_reports:
+            st.markdown("##### Detailed Facility Booking & Sales Audit Ledger")
+            if not v_bookings:
+                st.info("No bookings recorded to date.")
+            else:
+                table_data = []
+                for b in v_bookings:
+                    table_data.append({
+                        "Booking Ref": b['booking_id'],
+                        "Space Name": b['space_name'],
+                        "Client Name": b['customer_name'],
+                        "Event Date": b['booking_date'],
+                        "Amount (BWP)": f"{b['venue_cost']:,.2f}",
+                        "Status": b['status'],
+                        "POP Ref": b['pop_reference'] or "Pending"
+                    })
+                st.dataframe(table_data, use_container_width=True)
 
     conn.close()
 
@@ -1022,15 +1070,19 @@ elif user_role == "Vendor Portal & Service Fulfillment":
                     v_phone = st.text_input("Direct Telephone Line*")
                     v_bank = st.text_area("Settlement Bank Details*")
                 
+                v_logo_file = st.file_uploader("Corporate Vendor Logo", type=["png", "jpg", "jpeg"], key="reg_vendor_logo")
+
                 if st.form_submit_button("REGISTER VENDOR ENTITY", type="primary", use_container_width=True):
                     if v_biz and v_email and v_pw:
                         s_id = f"SUP-{int(datetime.datetime.now().timestamp())}"
                         pw_hash, salt = hash_pw(v_pw)
+                        v_logo_str = process_compressed_image_upload(v_logo_file, DEFAULT_LOGO, max_dim=400)
+                        
                         try:
                             conn.execute("INSERT INTO users VALUES (?, ?, ?, ?, 'Supporter', ?)", (f"USR-{s_id}", v_email, pw_hash, salt, s_id))
                             conn.execute("""INSERT INTO supporters (supporter_id, business_name, category, contact_person, email, phone, bank_details, brand_color, logo_url)
                                             VALUES (?, ?, ?, ?, ?, ?, ?, '#0F172A', ?)""",
-                                         (s_id, v_biz, v_cat, v_contact, v_email, v_phone, v_bank, DEFAULT_LOGO))
+                                         (s_id, v_biz, v_cat, v_contact, v_email, v_phone, v_bank, v_logo_str))
                             conn.commit()
                             st.success("Vendor profile registered successfully!")
                         except sqlite3.IntegrityError:
@@ -1055,7 +1107,7 @@ elif user_role == "Vendor Portal & Service Fulfillment":
                 
                 if st.form_submit_button("PUBLISH SERVICE TARIFF"):
                     if item_name:
-                        img_str = process_compressed_image_upload(item_img, "")
+                        img_str = process_compressed_image_upload(item_img, "", max_dim=400)
                         conn.execute("""INSERT INTO vendor_templates (supporter_id, item_name, description, unit_type, unit_price, image_url)
                                         VALUES (?, ?, ?, ?, ?, ?)""", (sup_id, item_name, item_desc, unit_type, unit_price, img_str))
                         conn.commit()
