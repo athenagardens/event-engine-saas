@@ -1,1233 +1,1174 @@
-import streamlit as st
-import sqlite3
-import datetime
-import hashlib
-import secrets
-import base64
-import json
-import os
-import io
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Executive Enterprise Venue & Event Operating Platform</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              800: '#166534',
+              900: '#14532d',
+            },
+            exec: {
+              dark: '#0f172a',
+              slate: '#1e293b',
+              gold: '#d97706',
+              goldHover: '#b45309',
+              bg: '#f8fafc',
+            }
+          },
+          fontFamily: {
+            serif: ['Playfair Display', 'Georgia', 'serif'],
+            sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
 
-# ReportLab Engine (In-Memory PDF Generation with Image Support)
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-# Image & QR Code Engine
-import qrcode
-from PIL import Image, ImageDraw, ImageFont
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-# ---------------------------------------------------------
-# 1. DATABASE ENGINE (SQLITE CLOUD-READY)
-# ---------------------------------------------------------
-DB_FILE = "enterprise_platform.db"
+  <!-- QR Code Generator Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  
+  <!-- jsPDF Library for Client-side PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    
-    # Auth Users
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        user_id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, salt TEXT, role TEXT, tenant_id TEXT
-    )''')
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .font-serif-title {
+      font-family: 'Playfair Display', Georgia, serif;
+    }
+    .gold-divider {
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #d97706, transparent);
+      margin: 0.5rem auto 1.5rem auto;
+      width: 50%;
+    }
+    .ticket-pass {
+      background: #ffffff;
+      border: 2px dashed #0f172a;
+    }
+    /* Printable ticket styles */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #printable-area, #printable-area * {
+        visibility: visible;
+      }
+      #printable-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col md:flex-row">
 
-    # Venues / Facilities
-    c.execute('''CREATE TABLE IF NOT EXISTS venues (
-        venue_id TEXT PRIMARY KEY, name TEXT, type TEXT, email TEXT, phone TEXT, whatsapp_no TEXT,
-        address TEXT, max_capacity INTEGER, tax_id TEXT, bank_details TEXT, brand_color TEXT,
-        logo_url TEXT, flyer_image_url TEXT, approved_supporter_ids TEXT
-    )''')
-    
-    # Venue Sub-Spaces
-    c.execute('''CREATE TABLE IF NOT EXISTS spaces (
-        space_id INTEGER PRIMARY KEY AUTOINCREMENT, venue_id TEXT, name TEXT, capacity INTEGER, 
-        daily_rate REAL, image_url TEXT, is_active INTEGER DEFAULT 1
-    )''')
-    
-    # Supporters / Vendors
-    c.execute('''CREATE TABLE IF NOT EXISTS supporters (
-        supporter_id TEXT PRIMARY KEY, business_name TEXT, category TEXT, contact_person TEXT,
-        email TEXT, phone TEXT, bank_details TEXT, brand_color TEXT, logo_url TEXT
-    )''')
-    
-    # Vendor Service Templates
-    c.execute('''CREATE TABLE IF NOT EXISTS vendor_templates (
-        template_id INTEGER PRIMARY KEY AUTOINCREMENT, supporter_id TEXT, item_name TEXT, description TEXT,
-        unit_type TEXT, unit_price REAL, image_url TEXT, is_active INTEGER DEFAULT 1
-    )''')
-    
-    # Venue Bookings
-    c.execute('''CREATE TABLE IF NOT EXISTS bookings (
-        booking_id TEXT PRIMARY KEY, venue_id TEXT, space_name TEXT, customer_name TEXT,
-        customer_email TEXT, customer_phone TEXT, booking_date TEXT, days INTEGER, venue_cost REAL,
-        payment_method TEXT, status TEXT, pop_reference TEXT, created_at TEXT
-    )''')
-    
-    # Vendor Invoices
-    c.execute('''CREATE TABLE IF NOT EXISTS vendor_invoices (
-        vendor_invoice_id TEXT PRIMARY KEY, parent_booking_id TEXT, supporter_id TEXT, venue_name TEXT,
-        customer_name TEXT, customer_email TEXT, customer_phone TEXT, event_date TEXT, items_json TEXT,
-        total_amount REAL, payment_method TEXT, status TEXT, pop_reference TEXT, created_at TEXT
-    )''')
-    
-    # Event Admission Passes
-    c.execute('''CREATE TABLE IF NOT EXISTS tickets (
-        ticket_id TEXT PRIMARY KEY, verification_hash TEXT, event_id TEXT, event_title TEXT, venue_id TEXT,
-        venue_name TEXT, venue_logo TEXT, buyer TEXT, email TEXT, qty INTEGER, total_paid REAL,
-        payment_method TEXT, status TEXT, pop_reference TEXT, scanned_at TEXT
-    )''')
-    
-    # Public Events
-    c.execute('''CREATE TABLE IF NOT EXISTS events (
-        event_id TEXT PRIMARY KEY, venue_id TEXT, venue_name TEXT, space_name TEXT, title TEXT, date TEXT,
-        price REAL, description TEXT, flyer_url TEXT, is_active INTEGER DEFAULT 1
-    )''')
-    
-    conn.commit()
-    conn.close()
+  <!-- SIDEBAR NAVIGATION -->
+  <aside class="w-full md:w-80 bg-slate-900 text-white flex-shrink-0 min-h-screen flex flex-col justify-between border-r border-slate-800 no-print">
+    <div>
+      <!-- Header -->
+      <div class="p-6 text-center border-b border-slate-800">
+        <h2 class="text-2xl font-bold font-serif-title text-amber-500 tracking-wide flex items-center justify-center gap-2">
+          <span>🏛️</span> EXECUTIVE PORTAL
+        </h2>
+        <p class="text-xs uppercase tracking-widest text-slate-400 font-semibold mt-1">Enterprise SaaS Infrastructure</p>
+      </div>
 
-init_db()
+      <!-- Navigation Radio-Style Menu -->
+      <nav class="p-4 space-y-2" id="nav-menu">
+        <button onclick="switchTab('tab-marketplace')" id="btn-tab-marketplace" class="nav-btn w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-medium transition-all bg-amber-600 text-white shadow">
+          <i class="fa-solid fa-[#0073e6] fa-store text-lg w-6"></i>
+          <span>Enterprise Marketplace & Event Hub</span>
+        </button>
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+        <button onclick="switchTab('tab-venue-ops')" id="btn-tab-venue-ops" class="nav-btn w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-medium transition-all text-slate-300 hover:bg-slate-800 hover:text-white">
+          <i class="fa-solid fa-building text-lg w-6"></i>
+          <span>Venue Operations & Analytics</span>
+        </button>
 
-# ---------------------------------------------------------
-# 2. UTILITIES: SECURITY, IMAGES, PDF & QR CODES
-# ---------------------------------------------------------
-DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150"
-SPACE_PRESETS = ["https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=400"]
+        <button onclick="switchTab('tab-vendor')" id="btn-tab-vendor" class="nav-btn w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-medium transition-all text-slate-300 hover:bg-slate-800 hover:text-white">
+          <i class="fa-solid fa-truck-ramp-box text-lg w-6"></i>
+          <span>Vendor Portal & Service Fulfillment</span>
+        </button>
 
-def hash_pw(password, salt=None):
-    if salt is None:
-        salt = secrets.token_hex(16)
-    salted_password = f"{salt}{password}".encode('utf-8')
-    pwd_hash = hashlib.sha256(salted_password).hexdigest()
-    return pwd_hash, salt
+        <button onclick="switchTab('tab-access')" id="btn-tab-access" class="nav-btn w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-medium transition-all text-slate-300 hover:bg-slate-800 hover:text-white">
+          <i class="fa-solid fa-qrcode text-lg w-6"></i>
+          <span>Access Control & Verification Suite</span>
+        </button>
 
-def verify_pw(password, pwd_hash, salt):
-    test_hash, _ = hash_pw(password, salt)
-    return test_hash == pwd_hash
+        <button onclick="switchTab('tab-ledger')" id="btn-tab-ledger" class="nav-btn w-full text-left px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-medium transition-all text-slate-300 hover:bg-slate-800 hover:text-white">
+          <i class="fa-solid fa-file-invoice-dollar text-lg w-6"></i>
+          <span>Executive Master Ledger & Audit Suite</span>
+        </button>
+      </nav>
+    </div>
 
-def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=400):
-    """Resizes and compresses images to a lightweight max 400x400 format."""
-    if uploaded_file is not None:
-        try:
-            img = Image.open(uploaded_file)
-            img.thumbnail((max_dim, max_dim))
-            if img.mode in ("RGBA", "P"):
-                img = img.convert("RGB")
-            
-            buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=75, optimize=True)
-            b64_str = base64.b64encode(buffer.getvalue()).decode()
-            return f"data:image/jpeg;base64,{b64_str}"
-        except Exception:
-            return fallback_url
-    return fallback_url
+    <!-- Auth & Maintenance Footer -->
+    <div class="p-4 border-t border-slate-800 space-y-3">
+      <div id="auth-status" class="bg-slate-800/80 p-3 rounded border border-slate-700 text-xs text-slate-300">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>
+        Status: <strong class="text-white">Public / Guest Session</strong>
+      </div>
 
-def generate_branded_flyer(venue_name, event_title, event_date, price, start_time="18:00", end_time="23:00", comments="", uploaded_bg_file=None, brand_color="#0F172A"):
-    """Generates a compact, clear event flyer canvas scaled to 400x500."""
-    width, height = 400, 500
+      <button onclick="resetDatabaseState()" class="w-full bg-rose-900/40 hover:bg-rose-800 text-rose-200 border border-rose-700 text-xs py-2 px-3 rounded transition flex items-center justify-center gap-2 font-semibold">
+        <i class="fa-solid fa-rotate-right"></i> Reset Database State
+      </button>
+    </div>
+  </aside>
 
-    if uploaded_bg_file is not None:
-        try:
-            bg_img = Image.open(uploaded_bg_file).convert("RGB")
-            bg_img.thumbnail((width, height))
-            
-            overlay = Image.new("RGBA", (width, height), (15, 23, 42, 215))
-            img = bg_img.convert("RGBA").resize((width, height))
-            img = Image.alpha_composite(img, overlay).convert("RGB")
-        except Exception:
-            img = Image.new("RGB", (width, height), color="#0F172A")
-    else:
-        img = Image.new("RGB", (width, height), color="#0F172A")
+  <!-- MAIN CONTENT AREA -->
+  <main class="flex-grow p-4 md:p-8 overflow-y-auto">
 
-    draw = ImageDraw.Draw(img)
-    
-    draw.rectangle([(0, 0), (width, 60)], fill=brand_color)
-    draw.rectangle([(8, 8), (width-8, height-8)], outline="#D97706", width=2)
-    
-    try:
-        font_header = ImageFont.truetype("arial.ttf", 18)
-        font_title = ImageFont.truetype("arialbd.ttf", 22)
-        font_sub = ImageFont.truetype("arialbd.ttf", 14)
-        font_body = ImageFont.truetype("arial.ttf", 12)
-        font_small = ImageFont.truetype("arial.ttf", 10)
-    except IOError:
-        font_header = font_title = font_sub = font_body = font_small = ImageFont.load_default()
+    <!-- ========================================================= -->
+    <!-- MODULE 1: ENTERPRISE MARKETPLACE & EVENT HUB -->
+    <!-- ========================================================= -->
+    <section id="tab-marketplace" class="tab-content">
+      <div class="text-center mb-6">
+        <h1 class="text-3xl font-bold font-serif-title text-slate-900">Enterprise Marketplace & Event Hub</h1>
+        <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold mt-1">Commercial Venue Reservations & Public Event Ticketing</p>
+        <div class="gold-divider"></div>
+      </div>
+
+      <!-- Inner Tabs -->
+      <div class="flex border-b border-slate-200 mb-6 bg-white rounded-t-lg p-1 shadow-sm max-w-3xl mx-auto">
+        <button onclick="switchSubTab('mkt-reservations')" id="btn-mkt-reservations" class="subtab-btn flex-1 py-2.5 px-4 text-center text-sm font-semibold rounded-md bg-slate-900 text-white transition">
+          🏛️ Commercial Venue Reservations
+        </button>
+        <button onclick="switchSubTab('mkt-tickets')" id="btn-mkt-tickets" class="subtab-btn flex-1 py-2.5 px-4 text-center text-sm font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+          🎟️ Box Office Event Tickets
+        </button>
+        <button onclick="switchSubTab('mkt-passes')" id="btn-mkt-passes" class="subtab-btn flex-1 py-2.5 px-4 text-center text-sm font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+          🎫 My Issued Ticket Passes
+        </button>
+      </div>
+
+      <!-- SUBTAB 1: VENUE RESERVATIONS -->
+      <div id="mkt-reservations" class="subtab-content">
+        <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-6">
+          
+          <!-- Step 1: Select Venue -->
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">1. Select Destination Venue Facility</label>
+            <select id="res-venue-select" onchange="renderVenueDetails()" class="w-full bg-slate-50 border border-slate-300 rounded p-3 text-slate-800 focus:ring-2 focus:ring-amber-500 font-medium">
+              <!-- Dynamic Venues -->
+            </select>
+          </div>
+
+          <!-- Venue Banner Card -->
+          <div id="venue-banner-card" class="bg-slate-900 text-white rounded-lg p-5 flex flex-col md:flex-row gap-6 items-center border-t-4 border-amber-500">
+            <!-- Dynamic Content -->
+          </div>
+
+          <hr class="border-slate-200">
+
+          <!-- Step 2: Space & Date Selection -->
+          <h3 class="text-lg font-serif-title font-bold text-center text-slate-800">2. Space Selection & Event Scheduling</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Sub-Space Asset</label>
+              <select id="res-space-select" onchange="calculateReservationCost()" class="w-full bg-slate-50 border border-slate-300 rounded p-2.5 text-slate-800 text-sm">
+                <!-- Dynamic Spaces -->
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Event Date</label>
+              <input type="date" id="res-date-input" onchange="checkAvailability()" class="w-full bg-slate-50 border border-slate-300 rounded p-2.5 text-slate-800 text-sm font-medium">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Duration (Days)</label>
+              <input type="number" id="res-days-input" min="1" value="1" onchange="calculateReservationCost()" class="w-full bg-slate-50 border border-slate-300 rounded p-2.5 text-slate-800 text-sm">
+            </div>
+          </div>
+
+          <div id="availability-status" class="p-3 rounded text-sm text-center font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
+            ✅ Schedule Confirmed: Available for booking.
+          </div>
+
+          <hr class="border-slate-200">
+
+          <!-- Step 3: Ancillary Vendors -->
+          <h3 class="text-lg font-serif-title font-bold text-center text-slate-800">3. Ancillary Vendor Service Bundles</h3>
+          <div id="vendor-services-accordion" class="space-y-3">
+            <!-- Dynamic Vendor Packages -->
+          </div>
+
+          <hr class="border-slate-200">
+
+          <!-- Step 4: Settlement & Contact Info -->
+          <h3 class="text-lg font-serif-title font-bold text-center text-slate-800">4. Settlement & Billing Confirmation</h3>
+          <form id="reservation-form" onsubmit="handleReservationSubmit(event)" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Client Entity / Full Name *</label>
+                <input type="text" id="res-client-name" required class="w-full bg-slate-50 border border-slate-300 rounded p-2.5 text-sm" placeholder="e.g. Apex Corporation">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Contact Phone / WhatsApp Line *</label>
+                <input type="tel" id="res-client-phone" required class="w-full bg-slate-50 border border-slate-300 rounded p-2.5 text-sm" placeholder="+267 71 234 567">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Billing Email Address *</label>
+                <input type="email" id="res-client-email" required class="w-full bg-slate-50 border border-slate-300 rounded p-2.5 text-sm" placeholder="billing@apex.co.bw">
+              </div>
+              <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Preferred Settlement Method</label>
+                <select id="res-payment-method" class="w-full bg-slate-50 border border-slate-300 rounded p-2.5 text-sm">
+                  <option value="Direct Bank Wire Transfer">Direct Bank Wire Transfer</option>
+                  <option value="eWallet">eWallet</option>
+                  <option value="Orange Money">Orange Money</option>
+                  <option value="Pay2Cell">Pay2Cell</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Cost Summary Box -->
+            <div class="bg-slate-100 p-4 rounded border border-slate-300 flex justify-between items-center font-bold text-slate-900">
+              <span>ESTIMATED TOTAL DUE:</span>
+              <span id="res-total-display" class="text-xl text-amber-600">BWP 0.00</span>
+            </div>
+
+            <button type="submit" class="w-full bg-slate-900 hover:bg-amber-600 text-white font-semibold py-3 px-6 rounded transition shadow-md uppercase tracking-wider text-sm">
+              Submit Reservation & Generate Invoices
+            </button>
+          </form>
+
+          <!-- Generated Downloads Container -->
+          <div id="reservation-downloads" class="hidden p-4 bg-emerald-50 border border-emerald-200 rounded space-y-3">
+            <h4 class="font-bold text-emerald-900 flex items-center gap-2">
+              <i class="fa-solid fa-circle-check text-emerald-600"></i> Reservation Successfully Issued!
+            </h4>
+            <p class="text-xs text-emerald-700">Download your official tax PDF invoices below:</p>
+            <div id="download-buttons-list" class="flex flex-wrap gap-2"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SUBTAB 2: BOX OFFICE EVENT TICKETS -->
+      <div id="mkt-tickets" class="subtab-content hidden">
+        <div class="max-w-4xl mx-auto space-y-6" id="public-events-list">
+          <!-- Dynamic Public Events List -->
+        </div>
+      </div>
+
+      <!-- SUBTAB 3: VIEW MY ISSUED PASSES -->
+      <div id="mkt-passes" class="subtab-content hidden">
+        <div class="max-w-xl mx-auto bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4">
+          <h3 class="text-lg font-serif-title font-bold text-slate-900 text-center">Lookup Issued Admission Passes</h3>
+          <div class="flex gap-2">
+            <input type="email" id="pass-lookup-email" placeholder="Enter your registered email address..." class="flex-grow bg-slate-50 border border-slate-300 rounded p-2.5 text-sm">
+            <button onclick="lookupPasses()" class="bg-slate-900 hover:bg-amber-600 text-white px-5 py-2.5 rounded font-semibold text-sm transition">
+              Search
+            </button>
+          </div>
+          <div id="issued-passes-result" class="space-y-4 mt-6"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- MODULE 2: VENUE OPERATIONS & ANALYTICS -->
+    <!-- ========================================================= -->
+    <section id="tab-venue-ops" class="tab-content hidden">
+      <div class="text-center mb-6">
+        <h1 class="text-3xl font-bold font-serif-title text-slate-900">Venue Operations & Console</h1>
+        <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold mt-1">Property Settings, Space Allocation & Financial Analytics</p>
+        <div class="gold-divider"></div>
+      </div>
+
+      <div class="max-w-5xl mx-auto space-y-8">
         
-    draw.text((width//2, 30), venue_name.upper(), fill="#FFFFFF", font=font_header, anchor="mm")
-    draw.text((width//2, 90), event_title, fill="#F59E0B", font=font_title, anchor="mm")
-    draw.line([(40, 115), (width-40, 115)], fill="#CBD5E1", width=1)
-    
-    draw.text((width//2, 140), f"DATE: {event_date}", fill="#FFFFFF", font=font_sub, anchor="mm")
-    draw.text((width//2, 165), f"TIME: {start_time} - {end_time}", fill="#38BDF8", font=font_sub, anchor="mm")
-    draw.text((width//2, 210), f"ADMISSION: BWP {price:,.2f}", fill="#10B981", font=font_title, anchor="mm")
-    
-    if comments:
-        draw.rectangle([(30, 240), (width-30, 430)], fill=(0, 0, 0, 150), outline="#D97706", width=1)
-        draw.text((width//2, 260), "— EVENT DETAILS —", fill="#D97706", font=font_sub, anchor="mm")
+        <!-- Metrics Bar -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white p-4 rounded border border-slate-200 border-l-4 border-l-amber-500 text-center shadow-sm">
+            <p class="text-xs font-bold uppercase text-slate-500">Total Bookings</p>
+            <p id="metric-bookings-count" class="text-2xl font-bold text-slate-900 mt-1">0</p>
+          </div>
+          <div class="bg-white p-4 rounded border border-slate-200 border-l-4 border-l-emerald-500 text-center shadow-sm">
+            <p class="text-xs font-bold uppercase text-slate-500">Gross Hire Revenue</p>
+            <p id="metric-venue-revenue" class="text-2xl font-bold text-slate-900 mt-1">BWP 0.00</p>
+          </div>
+          <div class="bg-white p-4 rounded border border-slate-200 border-l-4 border-l-blue-500 text-center shadow-sm">
+            <p class="text-xs font-bold uppercase text-slate-500">Active Spaces</p>
+            <p id="metric-spaces-count" class="text-2xl font-bold text-slate-900 mt-1">0</p>
+          </div>
+        </div>
+
+        <!-- Venue Management Forms -->
+        <div class="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-6">
+          <h3 class="text-xl font-serif-title font-bold text-slate-900 border-b pb-2">Facility Branding & Configuration</h3>
+          <form onsubmit="saveVenueSettings(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Venue Business Name</label>
+              <input type="text" id="ops-venue-name" required class="w-full bg-slate-50 border rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Max Licensed Capacity</label>
+              <input type="number" id="ops-venue-capacity" required class="w-full bg-slate-50 border rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">WhatsApp Line</label>
+              <input type="text" id="ops-venue-whatsapp" required class="w-full bg-slate-50 border rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Tax / CIPA Registration ID</label>
+              <input type="text" id="ops-venue-tax" required class="w-full bg-slate-50 border rounded p-2 text-sm">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Bank Settlement Details</label>
+              <textarea id="ops-venue-bank" rows="2" class="w-full bg-slate-50 border rounded p-2 text-sm" placeholder="Bank Name, Account Number, Branch Code..."></textarea>
+            </div>
+            <button type="submit" class="md:col-span-2 bg-slate-900 hover:bg-amber-600 text-white font-semibold py-2.5 rounded transition text-sm uppercase">
+              Save Facility Profile
+            </button>
+          </form>
+        </div>
+
+        <!-- Create Event Flyer Module -->
+        <div class="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4">
+          <h3 class="text-xl font-serif-title font-bold text-slate-900 border-b pb-2">Publish Public Box Office Event</h3>
+          <form onsubmit="publishPublicEvent(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Event Title</label>
+              <input type="text" id="ops-event-title" required class="w-full bg-slate-50 border rounded p-2 text-sm" placeholder="e.g. Summer Executive Gala">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Event Date</label>
+              <input type="date" id="ops-event-date" required class="w-full bg-slate-50 border rounded p-2 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Admission Price (BWP)</label>
+              <input type="number" step="0.01" id="ops-event-price" required class="w-full bg-slate-50 border rounded p-2 text-sm" placeholder="250.00">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Flyer Image URL</label>
+              <input type="url" id="ops-event-flyer" class="w-full bg-slate-50 border rounded p-2 text-sm" placeholder="https://images.unsplash.com/...">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Event Description & Lineup</label>
+              <textarea id="ops-event-desc" rows="2" class="w-full bg-slate-50 border rounded p-2 text-sm"></textarea>
+            </div>
+            <button type="submit" class="md:col-span-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 rounded transition text-sm uppercase">
+              Publish Event to Public Hub
+            </button>
+          </form>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- MODULE 3: VENDOR PORTAL & SERVICE FULFILLMENT -->
+    <!-- ========================================================= -->
+    <section id="tab-vendor" class="tab-content hidden">
+      <div class="text-center mb-6">
+        <h1 class="text-3xl font-bold font-serif-title text-slate-900">Vendor Portal & Fulfillment</h1>
+        <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold mt-1">Ancillary Service Catalog & Invoicing Management</p>
+        <div class="gold-divider"></div>
+      </div>
+
+      <div class="max-w-5xl mx-auto space-y-6">
+        <!-- Vendor Catalog Form -->
+        <div class="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4">
+          <h3 class="text-xl font-serif-title font-bold text-slate-900 border-b pb-2">Add Service Offering to Catalog</h3>
+          <form onsubmit="addVendorItem(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Service / Package Item</label>
+              <input type="text" id="vnd-item-name" required class="w-full bg-slate-50 border rounded p-2 text-sm" placeholder="e.g. VIP Catering Setup">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Unit Tariff Price (BWP)</label>
+              <input type="number" step="0.01" id="vnd-item-price" required class="w-full bg-slate-50 border rounded p-2 text-sm" placeholder="1500.00">
+            </div>
+            <div>
+              <label class="block text-xs font-bold uppercase text-slate-700 mb-1">Unit Basis</label>
+              <input type="text" id="vnd-item-unit" required class="w-full bg-slate-50 border rounded p-2 text-sm" placeholder="e.g. Per Guest / Day">
+            </div>
+            <div class="md:col-span-3">
+              <button type="submit" class="w-full bg-slate-900 hover:bg-amber-600 text-white font-semibold py-2.5 rounded transition text-sm uppercase">
+                Add Package to Active Catalog
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Vendor Orders Table -->
+        <div class="bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-4">
+          <h3 class="text-xl font-serif-title font-bold text-slate-900 border-b pb-2">Assigned Service Orders</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-slate-700 border-collapse">
+              <thead>
+                <tr class="bg-slate-900 text-white text-xs uppercase">
+                  <th class="p-3">Invoice Ref</th>
+                  <th class="p-3">Venue Facility</th>
+                  <th class="p-3">Client Contact</th>
+                  <th class="p-3">Event Date</th>
+                  <th class="p-3">Total Amount</th>
+                  <th class="p-3">Status</th>
+                </tr>
+              </thead>
+              <tbody id="vendor-orders-table-body" class="divide-y divide-slate-200">
+                <!-- Dynamic Vendor Invoices -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- MODULE 4: ACCESS CONTROL & VERIFICATION SUITE -->
+    <!-- ========================================================= -->
+    <section id="tab-access" class="tab-content hidden">
+      <div class="text-center mb-6">
+        <h1 class="text-3xl font-bold font-serif-title text-slate-900">Access Control & Verification Suite</h1>
+        <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold mt-1">Real-Time Ticket Scanning & Entry Audit</p>
+        <div class="gold-divider"></div>
+      </div>
+
+      <div class="max-w-xl mx-auto bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-6">
+        <div class="text-center">
+          <i class="fa-solid fa-qrcode text-5xl text-slate-800 mb-2"></i>
+          <h3 class="text-lg font-serif-title font-bold text-slate-900">Scan & Validate Admission Pass</h3>
+          <p class="text-xs text-slate-500">Enter ticket pass code or verification hash manually to process entry.</p>
+        </div>
+
+        <div class="space-y-3">
+          <input type="text" id="scan-ticket-id" placeholder="Paste Ticket Pass Hash or Ref (e.g. TKT-1690000000)..." class="w-full bg-slate-50 border border-slate-300 rounded p-3 text-center text-slate-800 font-mono text-sm">
+          <button onclick="verifyTicketPass()" class="w-full bg-slate-900 hover:bg-emerald-600 text-white font-semibold py-3 rounded transition uppercase text-sm">
+            Verify Ticket Code
+          </button>
+        </div>
+
+        <!-- Verification Results Box -->
+        <div id="scan-result-card" class="hidden p-4 rounded border text-center space-y-2">
+          <!-- Dynamic Scanner Response -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- MODULE 5: EXECUTIVE MASTER LEDGER & AUDIT SUITE -->
+    <!-- ========================================================= -->
+    <section id="tab-ledger" class="tab-content hidden">
+      <div class="text-center mb-6">
+        <h1 class="text-3xl font-bold font-serif-title text-slate-900">Executive Master Ledger & Audit Suite</h1>
+        <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold mt-1">Cross-Platform Audit Trail & Financial Settlement Verification</p>
+        <div class="gold-divider"></div>
+      </div>
+
+      <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg border border-slate-200 shadow-sm space-y-6">
+        <h3 class="text-xl font-serif-title font-bold text-slate-900 border-b pb-2">Master Venue Bookings Ledger</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-700 border-collapse">
+            <thead>
+              <tr class="bg-slate-900 text-white text-xs uppercase">
+                <th class="p-3">Booking ID</th>
+                <th class="p-3">Client Entity</th>
+                <th class="p-3">Space Hired</th>
+                <th class="p-3">Event Date</th>
+                <th class="p-3">Total Cost</th>
+                <th class="p-3">Status</th>
+                <th class="p-3">Action</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-table-body" class="divide-y divide-slate-200">
+              <!-- Dynamic Ledger Rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- PRINTABLE TICKET PASS MODAL -->
+  <div id="ticket-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-lg max-w-md w-full p-6 space-y-4 shadow-2xl relative">
+      <button onclick="closeTicketModal()" class="absolute top-3 right-3 text-slate-400 hover:text-slate-800 text-xl font-bold no-print">&times;</button>
+      
+      <div id="printable-area" class="ticket-pass p-5 rounded border-2 border-dashed border-slate-900 text-center space-y-3">
+        <h2 id="modal-event-title" class="text-xl font-bold font-serif-title text-amber-600">EVENT TITLE</h2>
+        <p id="modal-venue-name" class="text-xs font-semibold uppercase text-slate-600">VENUE NAME</p>
+        <hr class="border-slate-200">
+        <div class="text-xs text-slate-700 space-y-1 text-left">
+          <p><strong>ATTENDEE:</strong> <span id="modal-buyer-name">John Doe</span></p>
+          <p><strong>DATE:</strong> <span id="modal-event-date">2026-10-15</span></p>
+          <p><strong>PASS QTY:</strong> <span id="modal-pass-qty">1 Pass</span></p>
+          <p><strong>TICKET ID:</strong> <span id="modal-ticket-id" class="font-mono text-slate-500">TKT-000</span></p>
+        </div>
         
-        words = comments.split()
-        lines = []
-        current_line = []
-        for word in words:
-            current_line.append(word)
-            if len(" ".join(current_line)) > 35:
-                current_line.pop()
-                lines.append(" ".join(current_line))
-                current_line = [word]
-        if current_line:
-            lines.append(" ".join(current_line))
-            
-        y_offset = 290
-        for line in lines[:5]:
-            draw.text((width//2, y_offset), line, fill="#F8FAFC", font=font_body, anchor="mm")
-            y_offset += 20
+        <!-- QR Code Container -->
+        <div class="flex justify-center py-2">
+          <div id="qrcode-container" class="p-2 bg-white border border-slate-300 rounded"></div>
+        </div>
 
-    draw.text((width//2, 475), "OFFICIAL ADMISSION PASS — EXECUTIVE EVENT HUB", fill="#94A3B8", font=font_small, anchor="mm")
-    
-    buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=80)
-    b64_str = base64.b64encode(buffer.getvalue()).decode()
-    return f"data:image/jpeg;base64,{b64_str}"
+        <p class="text-[10px] uppercase text-slate-400">Official Admission Pass — Scan Code at Entry</p>
+      </div>
 
-def generate_qr_code_base64(data_string):
-    qr = qrcode.QRCode(version=1, box_size=6, border=2)
-    qr.add_data(data_string)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    return f"data:image/png;base64,{base64.b64encode(buffered.getvalue()).decode()}"
+      <button onclick="window.print()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2.5 rounded transition text-sm uppercase no-print">
+        <i class="fa-solid fa-print"></i> Print Ticket Pass
+      </button>
+    </div>
+  </div>
 
-def generate_in_memory_pdf_bytes(title_text, inv_id, created_at, entity_name, tax_id, client_name, client_email, items_list, total_amount, bank_details, logo_b64=None):
-    """Generates official lightweight PDF invoices embedded with entity branding logos."""
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-    story = []
-    styles = getSampleStyleSheet()
+  <!-- JavaScript App Engine -->
+  <script>
+    // ---------------------------------------------------------
+    // 1. IN-MEMORY ENTERPRISE STATE & DATA SEEDING
+    // ---------------------------------------------------------
+    const DEFAULT_LOGO = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150";
+    const SPACE_PRESETS = ["https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=400"];
 
-    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontSize=16, leading=20, textColor=colors.HexColor('#0F172A'), alignment=0)
-    body_style = ParagraphStyle('DocBody', parent=styles['Normal'], fontSize=9, leading=12, textColor=colors.HexColor('#1E293B'))
-    header_cell_style = ParagraphStyle('HeaderCell', parent=styles['Normal'], fontSize=9, leading=11, textColor=colors.white, fontName='Helvetica-Bold')
-
-    # Brand Logo Header Section
-    logo_flowable = None
-    if logo_b64 and "base64," in logo_b64:
-        try:
-            base64_data = logo_b64.split("base64,")[1]
-            img_data = base64.b64decode(base64_data)
-            img_buffer = io.BytesIO(img_data)
-            logo_flowable = RLImage(img_buffer, width=60, height=60)
-        except Exception:
-            logo_flowable = None
-
-    header_table_data = [
-        [logo_flowable if logo_flowable else "", Paragraph(f"<b>{title_text.upper()}</b><br/><font size=8 color='#64748B'>{entity_name}</font>", title_style)]
-    ]
-    t_header = Table(header_table_data, colWidths=[70, 470])
-    t_header.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
-    story.append(t_header)
-    story.append(Spacer(1, 15))
-
-    meta_data = [
-        [Paragraph(f"<b>Document Ref:</b> {inv_id}", body_style), Paragraph(f"<b>Date:</b> {created_at}", body_style)],
-        [Paragraph(f"<b>Entity / Issuer:</b> {entity_name}", body_style), Paragraph(f"<b>Tax ID / CIPA:</b> {tax_id}", body_style)],
-        [Paragraph(f"<b>Client / Billed To:</b> {client_name}", body_style), Paragraph(f"<b>Contact Email:</b> {client_email}", body_style)]
-    ]
-    t_meta = Table(meta_data, colWidths=[270, 270])
-    t_meta.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
-        ('PADDING', (0,0), (-1,-1), 5),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1'))
-    ]))
-    story.append(t_meta)
-    story.append(Spacer(1, 12))
-
-    table_data = [[
-        Paragraph("Line Item Description", header_cell_style),
-        Paragraph("Qty / Duration", header_cell_style),
-        Paragraph("Unit Price (BWP)", header_cell_style),
-        Paragraph("Line Total (BWP)", header_cell_style)
-    ]]
-    for item in items_list:
-        table_data.append([
-            Paragraph(item.get('item_name', 'Service Description'), body_style),
-            Paragraph(str(item.get('qty', 1)), body_style),
-            Paragraph(f"{item.get('unit_price', 0):,.2f}", body_style),
-            Paragraph(f"{item.get('subtotal', 0):,.2f}", body_style)
-        ])
-    
-    total_cell_style = ParagraphStyle('TotalCell', parent=styles['Normal'], fontSize=10, leading=13, textColor=colors.HexColor('#0F172A'), fontName='Helvetica-Bold')
-    table_data.append([
-        Paragraph("TOTAL AMOUNT DUE", total_cell_style),
-        Paragraph("", body_style),
-        Paragraph("", body_style),
-        Paragraph(f"BWP {total_amount:,.2f}", total_cell_style)
-    ])
-
-    t_items = Table(table_data, colWidths=[240, 90, 105, 105])
-    t_items.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0F172A')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CBD5E1')),
-        ('PADDING', (0,0), (-1,-1), 5),
-        ('SPAN', (0, -1), (2, -1))
-    ]))
-    story.append(t_items)
-    story.append(Spacer(1, 12))
-
-    story.append(Paragraph(f"<b>Settlement Terms & Bank Account Details:</b><br/>{bank_details}", body_style))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.getvalue()
-
-# ---------------------------------------------------------
-# 3. EXECUTIVE CSS STYLING
-# ---------------------------------------------------------
-st.set_page_config(page_title="Executive Enterprise Venue & Event Operating Platform", page_icon="🏛️", layout="wide")
-
-st.markdown("""
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-        
-        .stApp {
-            background-color: #F8FAFC !important;
-            color: #0F172A;
-            font-family: 'Plus Jakarta Sans', sans-serif;
+    let appData = {
+      venues: [
+        {
+          venue_id: "VEN-001",
+          name: "Grand Horizon Convention Center",
+          whatsapp_no: "+267 71 000 111",
+          address: "Plot 54321, Financial District, Gaborone",
+          max_capacity: 2500,
+          tax_id: "CIPA-BW-2026-99",
+          bank_details: "First National Bank Botswana | Account: 62000000001 | Branch: 280167",
+          brand_color: "#0f172a",
+          logo_url: DEFAULT_LOGO,
+          flyer_image_url: SPACE_PRESETS[0]
         }
-        
-        [data-testid="stSidebar"] {
-            background-color: #0F172A !important;
-            border-right: 1px solid #1E293B;
+      ],
+      spaces: [
+        { space_id: 1, venue_id: "VEN-001", name: "Grand Executive Ballroom", capacity: 1200, daily_rate: 15000.00 },
+        { space_id: 2, venue_id: "VEN-001", name: "Auditorium Hall A", capacity: 500, daily_rate: 7500.00 }
+      ],
+      supporters: [
+        { supporter_id: "SUP-001", business_name: "Aura Gourmet Catering", category: "Hospitality & Catering", bank_details: "Absa Bank Botswana | Acc: 1234567" }
+      ],
+      vendor_templates: [
+        { template_id: 1, supporter_id: "SUP-001", item_name: "VIP Buffet Banquet Service", description: "3-Course Executive Lunch/Dinner Buffet with service staff.", unit_type: "Guest", unit_price: 350.00 }
+      ],
+      bookings: [],
+      vendor_invoices: [],
+      tickets: [],
+      events: [
+        {
+          event_id: "EVT-101",
+          venue_id: "VEN-001",
+          venue_name: "Grand Horizon Convention Center",
+          title: "African Executive Tech & Financial Summit 2026",
+          date: "2026-11-20",
+          price: 1250.00,
+          description: "Premier gathering of leaders across technology, finance, and enterprise real estate.",
+          flyer_url: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=500"
         }
-        [data-testid="stSidebar"] * {
-            color: #F8FAFC !important;
-        }
+      ]
+    };
 
-        .exec-title {
-            font-family: 'Playfair Display', Georgia, serif;
-            color: #0F172A;
-            text-align: center;
-            font-weight: 700;
-            font-size: 2.2rem;
-            letter-spacing: -0.02em;
-            margin-bottom: 0.2rem;
-        }
-        .exec-subtitle {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            color: #475569;
-            text-align: center;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 1rem;
-        }
+    // Load from localStorage if available
+    function loadStorage() {
+      const saved = localStorage.getItem("enterprise_platform_db");
+      if (saved) {
+        try { appData = JSON.parse(saved); } catch(e) { console.error("Data parse error", e); }
+      } else {
+        saveStorage();
+      }
+    }
 
-        .gold-divider {
-            height: 2px;
-            background: linear-gradient(90deg, transparent, #D97706, transparent);
-            margin: 0.5rem auto 1.5rem auto;
-            width: 50%;
-        }
+    function saveStorage() {
+      localStorage.setItem("enterprise_platform_db", JSON.stringify(appData));
+    }
 
-        .exec-card {
-            background-color: #FFFFFF;
-            padding: 1.25rem;
-            border-radius: 4px;
-            border: 1px solid #E2E8F0;
-            border-top: 3px solid #0F172A;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            margin-bottom: 1rem;
-        }
+    function resetDatabaseState() {
+      if (confirm("Reset all stored platform state to enterprise default?")) {
+        localStorage.removeItem("enterprise_platform_db");
+        location.reload();
+      }
+    }
 
-        .metric-card {
-            background-color: #FFFFFF;
-            border: 1px solid #E2E8F0;
-            border-left: 4px solid #D97706;
-            padding: 15px;
-            border-radius: 4px;
-            text-align: center;
-        }
+    // ---------------------------------------------------------
+    // 2. TAB NAVIGATION
+    // ---------------------------------------------------------
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
 
-        .ticket-pass {
-            background: #FFFFFF;
-            border: 2px dashed #0F172A;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-        }
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-amber-600', 'text-white', 'shadow');
+        btn.classList.add('text-slate-300');
+      });
 
-        .form-label {
-            font-weight: 700;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #1E293B;
-            margin-bottom: 0.25rem;
-        }
+      const activeBtn = document.getElementById('btn-' + tabId);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-amber-600', 'text-white', 'shadow');
+        activeBtn.classList.remove('text-slate-300');
+      }
 
-        .stButton > button {
-            background-color: #0F172A !important;
-            color: #FFFFFF !important;
-            border-radius: 4px !important;
-            border: 1px solid #0F172A !important;
-            font-weight: 600 !important;
-            letter-spacing: 0.05em !important;
-            padding: 0.5rem 1rem !important;
-        }
-        .stButton > button:hover {
-            background-color: #D97706 !important;
-            border-color: #D97706 !important;
-            color: #FFFFFF !important;
-        }
+      // Refresh section-specific UI
+      if (tabId === 'tab-venue-ops') renderVenueOpsUI();
+      if (tabId === 'tab-vendor') renderVendorUI();
+      if (tabId === 'tab-ledger') renderLedgerUI();
+    }
 
-        @media print {
-            [data-testid="stSidebar"], button, header { display: none !important; }
-        }
-    </style>
-""", unsafe_allow_html=True)
+    function switchSubTab(subId) {
+      document.querySelectorAll('.subtab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(subId).classList.remove('hidden');
 
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-    st.session_state["user_email"] = None
-    st.session_state["user_role"] = None
-    st.session_state["tenant_id"] = None
+      document.querySelectorAll('.subtab-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-900', 'text-white');
+        btn.classList.add('text-slate-600');
+      });
 
-# ---------------------------------------------------------
-# 4. SIDEBAR NAVIGATION
-# ---------------------------------------------------------
-st.sidebar.markdown("<h2 style='text-align: center; font-family: Playfair Display, serif;'>🏛️ EXECUTIVE PORTAL</h2>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='text-align: center; font-size: 0.75rem; letter-spacing: 0.1em; color: #64748B;'><b>ENTERPRISE SAAS INFRASTRUCTURE</b></p>", unsafe_allow_html=True)
-st.sidebar.divider()
+      const activeBtn = document.getElementById('btn-' + subId);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-slate-900', 'text-white');
+        activeBtn.classList.remove('text-slate-600');
+      }
+    }
 
-user_role = st.sidebar.radio(
-    "MANAGEMENT CONSOLE:",
-    [
-        "Enterprise Marketplace & Event Hub",
-        "Venue Operations & Analytics Console",
-        "Vendor Portal & Service Fulfillment",
-        "Access Control & Verification Suite",
-        "Executive Master Ledger & Audit Suite"
-    ],
-    key="nav_sidebar_radio"
-)
+    // ---------------------------------------------------------
+    // 3. MODULE 1: MARKETPLACE & RESERVATIONS
+    // ---------------------------------------------------------
+    function initMarketplaceUI() {
+      const vSelect = document.getElementById('res-venue-select');
+      vSelect.innerHTML = appData.venues.map(v => `<option value="${v.venue_id}">${v.name}</option>`).join('');
+      
+      // Default Date to Tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('res-date-input').value = tomorrow.toISOString().split('T')[0];
 
-if user_role in ["Enterprise Marketplace & Event Hub", "Access Control & Verification Suite"]:
-    st.session_state["authenticated"] = False
-    st.session_state["user_email"] = None
-    st.session_state["user_role"] = None
-    st.session_state["tenant_id"] = None
+      renderVenueDetails();
+      renderPublicEvents();
+    }
 
-st.sidebar.divider()
-if st.session_state["authenticated"]:
-    st.sidebar.success(f"AUTHENTICATED: **{st.session_state['user_email']}**")
-    if st.sidebar.button("LOG OUT WORKSPACE", use_container_width=True, key="btn_logout"):
-        st.session_state["authenticated"] = False
-        st.session_state["user_email"] = None
-        st.session_state["user_role"] = None
-        st.session_state["tenant_id"] = None
-        st.rerun()
+    function renderVenueDetails() {
+      const vId = document.getElementById('res-venue-select').value;
+      const venue = appData.venues.find(v => v.venue_id === vId);
+      if (!venue) return;
 
-with st.sidebar.expander("SYSTEM MAINTENANCE"):
-    if st.button("RESET DATABASE STATE", type="primary", use_container_width=True, key="btn_reset_db"):
-        if os.path.exists(DB_FILE):
-            os.remove(DB_FILE)
-            init_db()
-            st.session_state.clear()
-            st.success("Database state re-initialized.")
-            st.rerun()
+      // Banner Card
+      document.getElementById('venue-banner-card').style.borderTopColor = venue.brand_color || '#d97706';
+      document.getElementById('venue-banner-card').innerHTML = `
+        <div class="flex-grow">
+          <h2 class="text-2xl font-bold font-serif-title">${venue.name}</h2>
+          <p class="text-xs text-slate-300 mt-1"><i class="fa-solid fa-location-dot text-amber-500 mr-1"></i> ${venue.address}</p>
+          <div class="mt-3 text-xs space-y-1">
+            <p><strong>Max Capacity:</strong> ${venue.max_capacity.toLocaleString()} Guests</p>
+            <p><strong>WhatsApp Support:</strong> ${venue.whatsapp_no}</p>
+          </div>
+        </div>
+        <img src="${venue.logo_url}" class="w-20 h-20 object-cover rounded bg-white p-1 border border-slate-700">
+      `;
 
-# ---------------------------------------------------------
-# 5. MODULE 1: ENTERPRISE MARKETPLACE & EVENT HUB
-# ---------------------------------------------------------
-if user_role == "Enterprise Marketplace & Event Hub":
-    st.markdown("<div class='exec-title'>Enterprise Marketplace & Event Hub</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Commercial Venue Reservations & Public Event Ticketing</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
+      // Sub-Spaces
+      const sSelect = document.getElementById('res-space-select');
+      const venueSpaces = appData.spaces.filter(s => s.venue_id === vId);
+      sSelect.innerHTML = venueSpaces.map(s => `<option value="${s.name}">${s.name} (Cap: ${s.capacity} | BWP ${s.daily_rate.toLocaleString()}/day)</option>`).join('');
 
-    tab_book, tab_tickets, tab_my_passes = st.tabs(["🏛️ Commercial Venue Reservations", "🎟️ Box Office Event Tickets", "🎫 View My Issued Ticket Passes"])
+      renderVendorAccordion();
+      calculateReservationCost();
+      checkAvailability();
+    }
 
-    with tab_book:
-        conn = get_db_connection()
-        venues = conn.execute("SELECT * FROM venues").fetchall()
-        
-        if not venues:
-            st.warning("No registered commercial properties published on network.")
-        else:
-            st.markdown("<div class='form-label'>1. Select Destination Venue Facility</div>", unsafe_allow_html=True)
-            sel_v_name = st.selectbox("", [v['name'] for v in venues], label_visibility="collapsed", key="mkt_select_venue")
-            sel_venue = next(v for v in venues if v['name'] == sel_v_name)
+    function renderVendorAccordion() {
+      const container = document.getElementById('vendor-services-accordion');
+      if (appData.supporters.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 italic text-center">No ancillary vendor packages currently listed.</p>`;
+        return;
+      }
 
-            col1, col2 = st.columns([1, 2])
-            col1.image(sel_venue['flyer_image_url'] or SPACE_PRESETS[0], use_container_width=True)
-            col2.markdown(f"""
-                <div class="exec-card" style="border-top-color:{sel_venue['brand_color']}; margin-bottom:0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <h2 style="margin:0; font-family:'Playfair Display', serif;">{sel_venue['name']}</h2>
-                        <img src="{sel_venue['logo_url'] or DEFAULT_LOGO}" style="background:white; padding:4px; border:1px solid #E2E8F0; border-radius:4px; height: 50px;">
-                    </div>
-                    <hr style="margin:1rem 0; border:0; border-top:1px solid #E2E8F0;">
-                    <p style="margin:0; font-size:0.9rem;">
-                        <b>LOCATION:</b> {sel_venue['address']}<br>
-                        <b>LICENSED CAPACITY:</b> {sel_venue['max_capacity']:,} Guests<br>
-                        <b>WHATSAPP VERIFICATION LINE:</b> {sel_venue['whatsapp_no']}
-                    </p>
+      container.innerHTML = appData.supporters.map(sup => {
+        const templates = appData.vendor_templates.filter(t => t.supporter_id === sup.supporter_id);
+        if (templates.length === 0) return '';
+
+        return `
+          <div class="border border-slate-200 rounded overflow-hidden">
+            <div class="bg-slate-100 p-3 font-semibold text-xs text-slate-800 uppercase flex justify-between items-center">
+              <span>${sup.business_name} (${sup.category})</span>
+            </div>
+            <div class="p-3 space-y-3 bg-white">
+              ${templates.map(t => `
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-slate-100 pb-2">
+                  <div>
+                    <strong class="text-sm text-slate-900">${t.item_name}</strong>
+                    <p class="text-xs text-slate-500">${t.description}</p>
+                    <p class="text-xs text-amber-600 font-bold mt-0.5">BWP ${t.unit_price.toLocaleString()} per${t.unit_type}</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-600 font-bold">Qty:</label>
+                    <input type="number" min="0" value="0" data-sup="${sup.supporter_id}" data-price="${t.unit_price}" data-name="${t.item_name}" onchange="calculateReservationCost()" class="vendor-qty-input w-20 bg-slate-50 border rounded p-1 text-sm text-center">
+                  </div>
                 </div>
-            """, unsafe_allow_html=True)
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
-            spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ? AND is_active = 1", (sel_venue['venue_id'],)).fetchall()
-            if not spaces:
-                st.warning("No available sub-spaces listed for this facility.")
-            else:
-                st.divider()
-                st.markdown("<h3 style='text-align: center; font-family: Playfair Display, serif;'>2. Space Selection & Event Scheduling</h3>", unsafe_allow_html=True)
-                
-                sc1, sc2, sc3 = st.columns(3)
-                with sc1:
-                    st.markdown("<div class='form-label'>Select Sub-Space Asset</div>", unsafe_allow_html=True)
-                    sel_sp_name = st.selectbox("", [s['name'] for s in spaces], label_visibility="collapsed", key="mkt_select_space")
-                    sel_space = next(s for s in spaces if s['name'] == sel_sp_name)
-                with sc2:
-                    st.markdown("<div class='form-label'>Event Date</div>", unsafe_allow_html=True)
-                    booking_date = st.date_input("", min_value=datetime.date.today(), label_visibility="collapsed", key="mkt_booking_date")
-                with sc3:
-                    st.markdown("<div class='form-label'>Reservation Duration (Days)</div>", unsafe_allow_html=True)
-                    booking_days = st.number_input("", min_value=1, value=1, label_visibility="collapsed", key="mkt_booking_days")
+    function checkAvailability() {
+      const vId = document.getElementById('res-venue-select').value;
+      const spaceName = document.getElementById('res-space-select').value;
+      const date = document.getElementById('res-date-input').value;
 
-                date_str = str(booking_date)
-                space_cost = sel_space['daily_rate'] * booking_days
+      const existing = appData.bookings.find(b => b.venue_id === vId && b.space_name === spaceName && b.booking_date === date && b.status !== 'Cancelled');
+      const statusEl = document.getElementById('availability-status');
 
-                existing = conn.execute("SELECT * FROM bookings WHERE venue_id = ? AND space_name = ? AND booking_date = ? AND status != 'Cancelled'", 
-                                        (sel_venue['venue_id'], sel_sp_name, date_str)).fetchone()
+      if (existing) {
+        statusEl.className = "p-3 rounded text-sm text-center font-medium bg-rose-50 text-rose-800 border border-rose-200";
+        statusEl.innerHTML = `❌ Date Locked: '${spaceName}' is already reserved on ${date}.`;
+      } else {
+        statusEl.className = "p-3 rounded text-sm text-center font-medium bg-emerald-50 text-emerald-800 border border-emerald-200";
+        statusEl.innerHTML = `✅ Schedule Confirmed: '${spaceName}' is available on ${date}.`;
+      }
+    }
 
-                if existing:
-                    st.error(f"❌ Date Locked: '{sel_sp_name}' is currently reserved on {date_str}.")
-                else:
-                    st.success(f"✅ Schedule Confirmed: '{sel_sp_name}' is available on {date_str}.")
-                    
-                    st.divider()
-                    st.markdown("<h3 style='text-align: center; font-family: Playfair Display, serif;'>3. Ancillary Vendor Service Bundles</h3>", unsafe_allow_html=True)
-                    approved_ids = json.loads(sel_venue['approved_supporter_ids'] or "[]")
-                    selected_vendor_orders = {}
+    function calculateReservationCost() {
+      const vId = document.getElementById('res-venue-select').value;
+      const spaceName = document.getElementById('res-space-select').value;
+      const days = parseInt(document.getElementById('res-days-input').value) || 1;
 
-                    if approved_ids:
-                        placeholders = ','.join('?' * len(approved_ids))
-                        supporters = conn.execute(f"SELECT * FROM supporters WHERE supporter_id IN ({placeholders})", approved_ids).fetchall()
-                        
-                        for sup in supporters:
-                            templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ? AND is_active = 1", (sup['supporter_id'],)).fetchall()
-                            if templates:
-                                with st.expander(f"Add Service Package: {sup['business_name']} ({sup['category']})"):
-                                    sup_items = []
-                                    sup_total = 0.0
-                                    for t in templates:
-                                        tc1, tc2 = st.columns([1, 3])
-                                        if t['image_url']: tc1.image(t['image_url'], use_container_width=True)
-                                        tc2.markdown(f"**{t['item_name'].upper()}**")
-                                        tc2.write(f"Tariff: BWP {t['unit_price']:,.2f} per {t['unit_type']}")
-                                        if t['description']: tc2.caption(t['description'])
-                                        
-                                        qty = tc2.number_input(f"Qty ({t['item_name']})", min_value=0, value=0, key=f"mkt_qty_{sup['supporter_id']}_{t['template_id']}")
-                                        if qty > 0:
-                                            cost = qty * t['unit_price']
-                                            sup_total += cost
-                                            sup_items.append({"item_name": t['item_name'], "qty": qty, "unit_price": t['unit_price'], "subtotal": cost})
-                                    if sup_items:
-                                        selected_vendor_orders[sup['supporter_id']] = {"info": sup, "items": sup_items, "total": sup_total}
+      const space = appData.spaces.find(s => s.venue_id === vId && s.name === spaceName);
+      let total = space ? space.daily_rate * days : 0;
 
-                    st.divider()
-                    st.markdown("<h3 style='text-align: center; font-family: Playfair Display, serif;'>4. Settlement & Billing Confirmation</h3>", unsafe_allow_html=True)
-                    
-                    with st.form("confirm_booking_form"):
-                        bc1, bc2 = st.columns(2)
-                        with bc1:
-                            st.markdown("<div class='form-label'>Client Entity / Full Name*</div>", unsafe_allow_html=True)
-                            c_name = st.text_input("", label_visibility="collapsed", key="mkt_c_name")
-                            st.markdown("<div class='form-label'>Billing Email Address*</div>", unsafe_allow_html=True)
-                            c_email = st.text_input("", label_visibility="collapsed", key="mkt_c_email")
-                        with bc2:
-                            st.markdown("<div class='form-label'>Contact Phone / WhatsApp Line*</div>", unsafe_allow_html=True)
-                            c_phone = st.text_input("", label_visibility="collapsed", key="mkt_c_phone")
-                            st.markdown("<div class='form-label'>Preferred Settlement Method</div>", unsafe_allow_html=True)
-                            c_pay = st.selectbox("", ["Direct Bank Wire Transfer", "eWallet", "Orange Money", "Pay2Cell"], label_visibility="collapsed", key="mkt_c_pay")
+      // Add selected vendor services
+      document.querySelectorAll('.vendor-qty-input').forEach(input => {
+        const qty = parseInt(input.value) || 0;
+        const price = parseFloat(input.dataset.price) || 0;
+        total += qty * price;
+      });
 
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.form_submit_button("SUBMIT RESERVATION & GENERATE INVOICES", type="primary", use_container_width=True):
-                            if c_name and c_email and c_phone:
-                                b_id = f"BK-{int(datetime.datetime.now().timestamp())}"
-                                created_date = str(datetime.date.today())
-                                
-                                conn.execute("""INSERT INTO bookings 
-                                    (booking_id, venue_id, space_name, customer_name, customer_email, customer_phone, booking_date, days, venue_cost, payment_method, status, created_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending POP / Verification', ?)""",
-                                    (b_id, sel_venue['venue_id'], sel_sp_name, c_name, c_email, c_phone, date_str, booking_days, space_cost, c_pay, created_date))
+      document.getElementById('res-total-display').innerText = `BWP ${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    }
 
-                                vendor_pdf_dict = {}
-                                for s_id, v_data in selected_vendor_orders.items():
-                                    v_inv_id = f"VINV-{int(datetime.datetime.now().timestamp())}"
-                                    conn.execute("""INSERT INTO vendor_invoices
-                                        (vendor_invoice_id, parent_booking_id, supporter_id, venue_name, customer_name, customer_email, customer_phone, event_date, items_json, total_amount, payment_method, status, created_at)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending POP', ?)""",
-                                        (v_inv_id, b_id, s_id, sel_venue['name'], c_name, c_email, c_phone, date_str, json.dumps(v_data['items']), v_data['total'], c_pay, created_date))
+    function handleReservationSubmit(e) {
+      e.preventDefault();
+      const vId = document.getElementById('res-venue-select').value;
+      const venue = appData.venues.find(v => v.venue_id === vId);
+      const spaceName = document.getElementById('res-space-select').value;
+      const date = document.getElementById('res-date-input').value;
+      const days = parseInt(document.getElementById('res-days-input').value) || 1;
+      
+      const clientName = document.getElementById('res-client-name').value;
+      const clientPhone = document.getElementById('res-client-phone').value;
+      const clientEmail = document.getElementById('res-client-email').value;
+      const payMethod = document.getElementById('res-payment-method').value;
 
-                                    v_info = v_data['info']
-                                    v_pdf = generate_in_memory_pdf_bytes(
-                                        f"Vendor Invoice — {v_info['business_name']}",
-                                        v_inv_id, created_date, v_info['business_name'], "TAX-PENDING",
-                                        c_name, c_email, v_data['items'], v_data['total'], v_info['bank_details'],
-                                        logo_b64=v_info['logo_url']
-                                    )
-                                    vendor_pdf_dict[v_info['business_name']] = (v_inv_id, v_pdf)
+      const bookingId = "BK-" + Date.now();
+      const space = appData.spaces.find(s => s.venue_id === vId && s.name === spaceName);
+      const venueCost = space ? space.daily_rate * days : 0;
 
-                                conn.commit()
-                                st.success(f"Reservation Request #{b_id} Generated Successfully!")
-                                
-                                venue_pdf_bytes = generate_in_memory_pdf_bytes(
-                                    f"Official Tax Invoice — {sel_venue['name']}",
-                                    b_id, created_date, sel_venue['name'], sel_venue['tax_id'],
-                                    c_name, c_email,
-                                    [{"item_name": f"Venue Hire ({sel_sp_name})", "qty": booking_days, "unit_price": sel_space['daily_rate'], "subtotal": space_cost}],
-                                    space_cost, sel_venue['bank_details'],
-                                    logo_b64=sel_venue['logo_url']
-                                )
-                                st.download_button("📄 DOWNLOAD VENUE HIRE PDF INVOICE", venue_pdf_bytes, file_name=f"Venue_Invoice_{b_id}.pdf", mime="application/pdf", key=f"dl_venue_{b_id}")
+      const newBooking = {
+        booking_id: bookingId,
+        venue_id: vId,
+        space_name: spaceName,
+        customer_name: clientName,
+        customer_email: clientEmail,
+        customer_phone: clientPhone,
+        booking_date: date,
+        days: days,
+        venue_cost: venueCost,
+        payment_method: payMethod,
+        status: "Pending POP",
+        created_at: new Date().toISOString().split('T')[0]
+      };
 
-                                for v_biz, (v_inv_id, v_pdf_data) in vendor_pdf_dict.items():
-                                    st.download_button(f"📄 DOWNLOAD VENDOR PDF INVOICE ({v_biz.upper()})", v_pdf_data, file_name=f"Vendor_Invoice_{v_inv_id}.pdf", mime="application/pdf", key=f"dl_vendor_{v_inv_id}")
-                            else:
-                                st.error("Please complete all required billing contact fields.")
-        conn.close()
+      appData.bookings.push(newBooking);
+      saveStorage();
 
-    with tab_tickets:
-        conn = get_db_connection()
-        events = conn.execute("SELECT * FROM events WHERE is_active = 1").fetchall()
-        if not events:
-            st.info("No public ticketed events listed.")
-        else:
-            for ev in events:
-                v = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (ev['venue_id'],)).fetchone()
-                col1, col2 = st.columns([1, 2])
-                col1.image(ev['flyer_url'] or SPACE_PRESETS[0], use_container_width=True)
-                col2.markdown(f"<h3 style='font-family: Playfair Display, serif; margin:0;'>{ev['title']}</h3>", unsafe_allow_html=True)
-                col2.write(f"**VENUE:** {ev['venue_name']} | **DATE:** {ev['date']} | **ADMISSION TARIFF:** BWP {ev['price']:,.2f}")
-                
-                with col2.form(f"tkt_buy_{ev['event_id']}"):
-                    tc1, tc2 = st.columns(2)
-                    with tc1:
-                        st.markdown("<div class='form-label'>Pass Quantity</div>", unsafe_allow_html=True)
-                        t_qty = st.number_input("", min_value=1, value=1, label_visibility="collapsed", key=f"tkt_qty_{ev['event_id']}")
-                        st.markdown("<div class='form-label'>Attendee Name*</div>", unsafe_allow_html=True)
-                        t_buyer = st.text_input("", label_visibility="collapsed", key=f"tkt_buyer_{ev['event_id']}")
-                    with tc2:
-                        st.markdown("<div class='form-label'>Email Address*</div>", unsafe_allow_html=True)
-                        t_email = st.text_input("", label_visibility="collapsed", key=f"tkt_email_{ev['event_id']}")
-                        st.markdown("<div class='form-label'>Settlement Method</div>", unsafe_allow_html=True)
-                        t_pay = st.selectbox("", ["Direct Bank Wire Transfer", "eWallet", "Orange Money", "Pay2Cell"], label_visibility="collapsed", key=f"tkt_pay_{ev['event_id']}")
-                    
-                    if st.form_submit_button("SUBMIT TICKET ORDER"):
-                        if t_buyer and t_email:
-                            tkt_id = f"TKT-{int(datetime.datetime.now().timestamp())}"
-                            sec_hash = f"HASH-{hashlib.sha256(f'{tkt_id}-{t_email}'.encode()).hexdigest()[:10].upper()}"
-                            
-                            conn.execute("""INSERT INTO tickets
-                                (ticket_id, verification_hash, event_id, event_title, venue_id, venue_name, venue_logo, buyer, email, qty, total_paid, payment_method, status)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending WhatsApp POP Verification')""",
-                                (tkt_id, sec_hash, ev['event_id'], ev['title'], v['venue_id'] if v else "", ev['venue_name'], v['logo_url'] if v else DEFAULT_LOGO, t_buyer, t_email, t_qty, t_qty*ev['price'], t_pay))
-                            conn.commit()
-                            
-                            st.warning("⏳ Order Placed! Ticket pass is pending payment verification.")
-                            
-                            wa_num = v['whatsapp_no'] if v and v['whatsapp_no'] else ""
-                            st.info(f"👉 **Next Step:** Send your Proof of Payment (POP) along with Order Ref **`{tkt_id}`** via WhatsApp to **+{wa_num}** for verification before your ticket pass is released.")
-                            if wa_num:
-                                wa_link = f"https://wa.me/{wa_num}?text=Hello,%20here%20is%20my%20POP%20for%20Ticket%20Ref:%20{tkt_id}"
-                                st.markdown(f"[📲 Click Here to Open WhatsApp & Submit POP]({wa_link})")
-                        else:
-                            st.error("Please enter required attendee details.")
-        conn.close()
+      // Show Downloads
+      const downloadContainer = document.getElementById('reservation-downloads');
+      const buttonsList = document.getElementById('download-buttons-list');
+      downloadContainer.classList.remove('hidden');
 
-    with tab_my_passes:
-        st.markdown("##### Lookup & Print Your Verified Event Ticket Passes")
-        lookup_ref = st.text_input("Enter Order Ref or Email Address to View Released Ticket Pass:", placeholder="e.g. TKT-1700000000 or email@domain.com")
-        
-        if lookup_ref:
-            conn = get_db_connection()
-            query_tkts = conn.execute("""
-                SELECT * FROM tickets 
-                WHERE ticket_id = ? OR email = ?
-            """, (lookup_ref, lookup_ref)).fetchall()
+      buttonsList.innerHTML = `
+        <button onclick="downloadVenuePDF('${bookingId}')" class="bg-slate-900 hover:bg-slate-800 text-white text-xs px-3 py-2 rounded flex items-center gap-1.5 font-medium transition">
+          <i class="fa-solid fa-file-pdf text-amber-500"></i> Venue Hire Tax Invoice PDF
+        </button>
+      `;
 
-            if not query_tkts:
-                st.error("No ticket records found for the provided lookup reference.")
-            else:
-                for tkt in query_tkts:
-                    if 'Verified' in tkt['status'] or 'Claimed' in tkt['status']:
-                        qr_b64 = generate_qr_code_base64(tkt['verification_hash'])
-                        
-                        st.markdown(f"""
-                            <div class="ticket-pass">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <h2 style="margin:0; font-family:'Playfair Display', serif; color:#0F172A;">{tkt['event_title']}</h2>
-                                    <span style="background:#10B981; color:white; padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:bold;">{tkt['status'].upper()}</span>
-                                </div>
-                                <hr style="margin:12px 0;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="text-align:left;">
-                                        <p style="margin:4px 0;"><b>PASS REF:</b> {tkt['ticket_id']}</p>
-                                        <p style="margin:4px 0;"><b>ATTENDEE:</b> {tkt['buyer']}</p>
-                                        <p style="margin:4px 0;"><b>ADMIT QUANTITY:</b> {tkt['qty']} Person(s)</p>
-                                        <p style="margin:4px 0;"><b>VENUE:</b> {tkt['venue_name']}</p>
-                                        <p style="margin:4px 0; font-family:monospace; color:#D97706;"><b>SECURITY HASH:</b> {tkt['verification_hash']}</p>
-                                    </div>
-                                    <div>
-                                        <img src="{qr_b64}" style="width:120px; height:120px; border:1px solid #CBD5E1; padding:4px; border-radius:4px;">
-                                    </div>
-                                </div>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                    else:
-                        st.warning(f"⏳ Pass #{tkt['ticket_id']} for {tkt['event_title']} is still **{tkt['status']}**. Please contact the event owner or upload POP for release.")
-            conn.close()
+      alert(`Reservation Request #${bookingId} successfully recorded!`);
+    }
 
-# ---------------------------------------------------------
-# 6. MODULE 2: VENUE OPERATIONS & ANALYTICS CONSOLE
-# ---------------------------------------------------------
-elif user_role == "Venue Operations & Analytics Console":
-    st.markdown("<div class='exec-title'>Venue Operations & Analytics Console</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Corporate Facility, Real-Time Statistics & Sub-Space Asset Suite</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
+    // ---------------------------------------------------------
+    // 4. PUBLIC EVENTS & TICKETING
+    // ---------------------------------------------------------
+    function renderPublicEvents() {
+      const container = document.getElementById('public-events-list');
+      if (appData.events.length === 0) {
+        container.innerHTML = `<p class="text-slate-500 text-center py-8">No public events currently scheduled.</p>`;
+        return;
+      }
 
-    if not st.session_state["authenticated"] or st.session_state["user_role"] != "Facility Owner":
-        st.info("🔒 Facility Operator Authentication Required")
-        
-        login_tab, reg_tab = st.tabs(["Operator Workspace Login", "Register New Commercial Property"])
-        
-        with login_tab:
-            with st.form("fac_login_form"):
-                st.markdown("<div class='form-label'>Operator Email Address</div>", unsafe_allow_html=True)
-                l_email = st.text_input("", label_visibility="collapsed", key="fac_login_email")
-                st.markdown("<div class='form-label'>Account Password</div>", unsafe_allow_html=True)
-                l_pw = st.text_input("", type="password", label_visibility="collapsed", key="fac_login_pw")
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.form_submit_button("AUTHENTICATE WORKSPACE", type="primary", use_container_width=True):
-                    user = conn.execute("SELECT * FROM users WHERE email = ? AND role = 'Facility Owner'", (l_email,)).fetchone()
-                    if user and verify_pw(l_pw, user['password_hash'], user['salt']):
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_email"] = l_email
-                        st.session_state["user_role"] = "Facility Owner"
-                        st.session_state["tenant_id"] = user['tenant_id']
-                        st.success("Authentication successful!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid operator credentials.")
-
-        with reg_tab:
-            with st.form("reg_facility_auth_form"):
-                rc1, rc2 = st.columns(2)
-                with rc1:
-                    st.markdown("<div class='form-label'>Venue Facility Name*</div>", unsafe_allow_html=True)
-                    f_name = st.text_input("", label_visibility="collapsed", key="reg_fac_name")
-                    st.markdown("<div class='form-label'>Facility Designation</div>", unsafe_allow_html=True)
-                    f_type = st.selectbox("", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"], label_visibility="collapsed", key="reg_fac_type")
-                    st.markdown("<div class='form-label'>Corporate Email*</div>", unsafe_allow_html=True)
-                    f_email = st.text_input("", label_visibility="collapsed", key="reg_fac_email")
-                    st.markdown("<div class='form-label'>Account Password*</div>", unsafe_allow_html=True)
-                    f_pw = st.text_input("", type="password", label_visibility="collapsed", key="reg_fac_pw")
-                    st.markdown("<div class='form-label'>Direct Telephone Line*</div>", unsafe_allow_html=True)
-                    f_phone = st.text_input("", label_visibility="collapsed", key="reg_fac_phone")
-                with rc2:
-                    st.markdown("<div class='form-label'>WhatsApp Audit Verification Line*</div>", unsafe_allow_html=True)
-                    f_whatsapp = st.text_input("", placeholder="26771234567", label_visibility="collapsed", key="reg_fac_wa")
-                    st.markdown("<div class='form-label'>Physical Location / Street Address*</div>", unsafe_allow_html=True)
-                    f_address = st.text_input("", label_visibility="collapsed", key="reg_fac_addr")
-                    st.markdown("<div class='form-label'>Tax / CIPA Registration Number*</div>", unsafe_allow_html=True)
-                    f_tax = st.text_input("", label_visibility="collapsed", key="reg_fac_tax")
-                    st.markdown("<div class='form-label'>Max Guest Capacity</div>", unsafe_allow_html=True)
-                    f_cap = st.number_input("", min_value=10, value=500, label_visibility="collapsed", key="reg_fac_cap")
-                    st.markdown("<div class='form-label'>Primary Settlement Bank Details*</div>", unsafe_allow_html=True)
-                    f_bank = st.text_area("", placeholder="Bank Name, Branch, Account No.", label_visibility="collapsed", key="reg_fac_bank")
-
-                st.markdown("<div class='form-label'>Corporate Logo Image</div>", unsafe_allow_html=True)
-                logo_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="reg_fac_logo")
-                
-                if st.form_submit_button("REGISTER FACILITY & PUBLISH WORKSPACE", type="primary", use_container_width=True):
-                    if f_name and f_email and f_pw and f_tax:
-                        v_id = f"VEN-{int(datetime.datetime.now().timestamp())}"
-                        pw_hash, salt = hash_pw(f_pw)
-                        
-                        logo_str = process_compressed_image_upload(logo_file, DEFAULT_LOGO, max_dim=400)
-
-                        try:
-                            conn.execute("INSERT INTO users VALUES (?, ?, ?, ?, 'Facility Owner', ?)",
-                                         (f"USR-{v_id}", f_email, pw_hash, salt, v_id))
-                            conn.execute("""INSERT INTO venues 
-                                (venue_id, name, type, email, phone, whatsapp_no, address, max_capacity, tax_id, bank_details, brand_color, logo_url, flyer_image_url, approved_supporter_ids)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '#0F172A', ?, ?, '[]')""",
-                                (v_id, f_name, f_type, f_email, f_phone, f_whatsapp, f_address, f_cap, f_tax, f_bank, logo_str, SPACE_PRESETS[0]))
-                            conn.commit()
-                            st.success("Commercial Property successfully registered. Please log in.")
-                        except sqlite3.IntegrityError:
-                            st.error("Email is already registered.")
-                    else:
-                        st.error("Please fill in all mandatory fields.")
-    else:
-        v_id = st.session_state["tenant_id"]
-        venue = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (v_id,)).fetchone()
-        
-        st.subheader(f"Workspace: {venue['name']}")
-
-        # ------------------- OPERATIONAL STATS & KPI DASHBOARD -------------------
-        st.markdown("##### 📊 Venue Operational Performance & Booking Statistics")
-        v_bookings = conn.execute("SELECT * FROM bookings WHERE venue_id = ?", (v_id,)).fetchall()
-        v_tickets = conn.execute("SELECT * FROM tickets WHERE venue_id = ?", (v_id,)).fetchall()
-        
-        tot_venue_rev = sum(b['venue_cost'] for b in v_bookings if 'Cancelled' not in b['status'])
-        tot_tkt_rev = sum(t['total_paid'] for t in v_tickets if 'Cancelled' not in t['status'])
-        active_bk_cnt = len([b for b in v_bookings if 'Cancelled' not in b['status']])
-        tkt_sold_cnt = sum(t['qty'] for t in v_tickets if 'Cancelled' not in t['status'])
-
-        m1, m2, m3, m4 = st.columns(4)
-        m1.markdown(f"<div class='metric-card'><small>Total Venue Revenue</small><h3>BWP {tot_venue_rev:,.2f}</h3></div>", unsafe_allow_html=True)
-        m2.markdown(f"<div class='metric-card'><small>Active Space Bookings</small><h3>{active_bk_cnt}</h3></div>", unsafe_allow_html=True)
-        m3.markdown(f"<div class='metric-card'><small>Box Office Revenue</small><h3>BWP {tot_tkt_rev:,.2f}</h3></div>", unsafe_allow_html=True)
-        m4.markdown(f"<div class='metric-card'><small>Total Tickets Sold</small><h3>{tkt_sold_cnt}</h3></div>", unsafe_allow_html=True)
-        st.divider()
-
-        tab_subspaces, tab_supp, tab_events, tab_owner_pop, tab_reports = st.tabs([
-            "🏛️ Sub-Space Inventory", "🤝 Vendor Approvals", "🎟️ Public Events", "📲 WhatsApp POP Verification", "📈 Detailed Booking Ledger"
-        ])
-        
-        with tab_subspaces:
-            with st.form("add_space_form"):
-                st.markdown("##### Add New Sub-Space Asset")
-                sc1, sc2, sc3 = st.columns(3)
-                sp_name = sc1.text_input("Sub-Space Name (e.g. Hall A)")
-                sp_cap = sc2.number_input("Max Capacity", min_value=1, value=100)
-                sp_rate = sc3.number_input("Daily Hire Tariff (BWP)", min_value=0.0, value=1500.0)
-                sp_img = st.file_uploader("Space Image", type=["png", "jpg", "jpeg"])
-                
-                if st.form_submit_button("ADD SUB-SPACE TO INVENTORY"):
-                    if sp_name:
-                        img_str = process_compressed_image_upload(sp_img, SPACE_PRESETS[0], max_dim=400)
-                        conn.execute("INSERT INTO spaces (venue_id, name, capacity, daily_rate, image_url) VALUES (?, ?, ?, ?, ?)",
-                                     (v_id, sp_name, sp_cap, sp_rate, img_str))
-                        conn.commit()
-                        st.success(f"Added {sp_name} to inventory.")
-                        st.rerun()
-
-            st.divider()
-            st.markdown("##### Current Sub-Spaces")
-            spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ?", (v_id,)).fetchall()
-            for s in spaces:
-                col1, col2 = st.columns([1, 4])
-                col1.image(s['image_url'] or SPACE_PRESETS[0], use_container_width=True)
-                col2.write(f"**{s['name']}** | Capacity: {s['capacity']} | Daily Rate: BWP {s['daily_rate']:,.2f}")
-
-        with tab_supp:
-            st.markdown("##### Approved Vendor Network")
-            all_vendors = conn.execute("SELECT * FROM supporters").fetchall()
-            current_approved = json.loads(venue['approved_supporter_ids'] or "[]")
+      container.innerHTML = appData.events.map(ev => `
+        <div class="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm flex flex-col md:flex-row">
+          <img src="${ev.flyer_url || SPACE_PRESETS[0]}" class="w-full md:w-56 h-48 md:h-auto object-cover">
+          <div class="p-5 flex-grow space-y-3">
+            <h3 class="text-xl font-bold font-serif-title text-slate-900">${ev.title}</h3>
+            <p class="text-xs text-slate-500">${ev.description}</p>
+            <div class="text-xs text-slate-700 font-semibold space-y-1">
+              <p><i class="fa-solid fa-building text-amber-600 mr-1"></i> ${ev.venue_name}</p>
+              <p><i class="fa-solid fa-calendar text-amber-600 mr-1"></i> Date: ${ev.date}</p>
+              <p><i class="fa-solid fa-tag text-amber-600 mr-1"></i> Tariff: BWP ${ev.price.toLocaleString()} per pass</p>
+            </div>
             
-            updated_approved = []
-            for v in all_vendors:
-                is_app = v['supporter_id'] in current_approved
-                if st.checkbox(f"Approve {v['business_name']} ({v['category']})", value=is_app, key=f"chk_v_{v['supporter_id']}"):
-                    updated_approved.append(v['supporter_id'])
-            
-            if st.button("UPDATE VENDOR NETWORK APPROVALS"):
-                conn.execute("UPDATE venues SET approved_supporter_ids = ? WHERE venue_id = ?", (json.dumps(updated_approved), v_id))
-                conn.commit()
-                st.success("Vendor network updated successfully.")
+            <form onsubmit="purchaseTicket(event, '${ev.event_id}')" class="pt-2 border-t border-slate-100 flex flex-wrap gap-2 items-center">
+              <input type="text" id="tkt-buyer-${ev.event_id}" placeholder="Your Full Name" required class="bg-slate-50 border rounded p-2 text-xs flex-grow">
+              <input type="email" id="tkt-email-${ev.event_id}" placeholder="Your Email Address" required class="bg-slate-50 border rounded p-2 text-xs flex-grow">
+              <input type="number" id="tkt-qty-${ev.event_id}" value="1" min="1" required class="bg-slate-50 border rounded p-2 text-xs w-16 text-center">
+              <button type="submit" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs px-4 py-2 rounded transition uppercase">
+                Purchase Pass
+              </button>
+            </form>
+          </div>
+        </div>
+      `).join('');
+    }
 
-        with tab_events:
-            st.markdown("##### Create & Manage Public Ticketed Events")
-            
-            ev_title = st.text_input("Event Title*", key="ev_p_title")
-            col_e1, col_e2 = st.columns(2)
-            ev_date = col_e1.date_input("Event Date*", min_value=datetime.date.today(), key="ev_p_date")
-            ev_price = col_e2.number_input("Ticket Tariff (BWP)*", min_value=0.0, value=100.0, step=10.0, key="ev_p_price")
-            
-            t_col1, t_col2 = st.columns(2)
-            ev_start_time = t_col1.time_input("Event Start Time*", value=datetime.time(18, 0), key="ev_p_start")
-            ev_end_time = t_col2.time_input("Event End Time*", value=datetime.time(23, 0), key="ev_p_end")
+    function purchaseTicket(e, eventId) {
+      e.preventDefault();
+      const eventObj = appData.events.find(ev => ev.event_id === eventId);
+      const buyer = document.getElementById(`tkt-buyer-${eventId}`).value;
+      const email = document.getElementById(`tkt-email-${eventId}`).value;
+      const qty = parseInt(document.getElementById(`tkt-qty-${eventId}`).value) || 1;
 
-            ev_comments = st.text_area("Additional Notes / Comments for Flyer", key="ev_p_comments")
-            ev_flyer_bg = st.file_uploader("Upload Custom Flyer Background Image", type=["png", "jpg", "jpeg"], key="ev_p_flyer_bg")
-            
-            st.divider()
-            st.markdown("##### 👁️ Live Flyer Preview")
-            
-            start_str = ev_start_time.strftime("%H:%M")
-            end_str = ev_end_time.strftime("%H:%M")
+      const ticketId = "TKT-" + Date.now();
+      const hash = "HASH-" + Math.random().toString(36).substring(2, 10).toUpperCase();
 
-            if ev_title:
-                preview_flyer = generate_branded_flyer(
-                    venue_name=venue['name'],
-                    event_title=ev_title,
-                    event_date=str(ev_date),
-                    price=ev_price,
-                    start_time=start_str,
-                    end_time=end_str,
-                    comments=ev_comments,
-                    uploaded_bg_file=ev_flyer_bg,
-                    brand_color=venue['brand_color'] or "#0F172A"
-                )
-                st.image(preview_flyer, caption="Live Preview of Branded Flyer Pass", width=300)
-            else:
-                st.caption("Type an event title above to view the live generated flyer preview.")
+      const ticket = {
+        ticket_id: ticketId,
+        verification_hash: hash,
+        event_id: eventId,
+        event_title: eventObj.title,
+        venue_id: eventObj.venue_id,
+        venue_name: eventObj.venue_name,
+        buyer: buyer,
+        email: email,
+        qty: qty,
+        total_paid: qty * eventObj.price,
+        status: "Valid Pass",
+        created_at: new Date().toISOString()
+      };
 
-            st.divider()
-            if st.button("PUBLISH EVENT TO BOX OFFICE", type="primary", use_container_width=True):
-                if ev_title:
-                    ev_id = f"EV-{int(datetime.datetime.now().timestamp())}"
-                    
-                    flyer_str = generate_branded_flyer(
-                        venue_name=venue['name'],
-                        event_title=ev_title,
-                        event_date=str(ev_date),
-                        price=ev_price,
-                        start_time=start_str,
-                        end_time=end_str,
-                        comments=ev_comments,
-                        uploaded_bg_file=ev_flyer_bg,
-                        brand_color=venue['brand_color'] or "#0F172A"
-                    )
-                    
-                    conn.execute("""INSERT INTO events 
-                        (event_id, venue_id, venue_name, space_name, title, date, price, description, flyer_url, is_active)
-                        VALUES (?, ?, ?, 'Main Facility', ?, ?, ?, ?, ?, 1)""",
-                        (ev_id, v_id, venue['name'], ev_title, str(ev_date), ev_price, ev_comments, flyer_str))
-                    conn.commit()
-                    st.success(f"🎉 Event '{ev_title}' published successfully!")
-                    st.rerun()
-                else:
-                    st.error("Please enter a title for the event before publishing.")
+      appData.tickets.push(ticket);
+      saveStorage();
 
-            st.divider()
-            st.markdown("##### Published Events")
-            
-            my_events = conn.execute("SELECT * FROM events WHERE venue_id = ? ORDER BY date DESC", (v_id,)).fetchall()
-            if not my_events:
-                st.info("No public events published yet.")
-            else:
-                for ev in my_events:
-                    with st.expander(f"{'🟢 Active' if ev['is_active'] else '🔴 Inactive'} — {ev['title']} ({ev['date']})"):
-                        ec1, ec2 = st.columns([1, 2])
-                        if ev['flyer_url']:
-                            ec1.image(ev['flyer_url'], width=150)
-                        ec2.write(f"**Ticket Tariff:** BWP {ev['price']:,.2f}")
-                        ec2.write(f"**Notes:** {ev['description'] or 'N/A'}")
-                        
-                        btn_label = "Deactivate Event" if ev['is_active'] else "Activate Event"
-                        if ec2.button(btn_label, key=f"toggle_ev_{ev['event_id']}"):
-                            new_status = 0 if ev['is_active'] else 1
-                            conn.execute("UPDATE events SET is_active = ? WHERE event_id = ?", (new_status, ev['event_id']))
-                            conn.commit()
-                            st.rerun()
+      openTicketModal(ticket);
+    }
 
-        with tab_owner_pop:
-            st.markdown("##### Capture Received WhatsApp POP & Release Ticket Passes")
-            
-            event_tickets = conn.execute("""
-                SELECT * FROM tickets 
-                WHERE venue_id = ? 
-                ORDER BY ticket_id DESC
-            """, (v_id,)).fetchall()
+    function lookupPasses() {
+      const email = document.getElementById('pass-lookup-email').value.trim();
+      const resultsContainer = document.getElementById('issued-passes-result');
 
-            if not event_tickets:
-                st.info("No ticket orders submitted for your events yet.")
-            else:
-                pending_tkts = [t for t in event_tickets if 'Pending' in t['status']]
-                released_tkts = [t for t in event_tickets if 'Verified' in t['status'] or 'Claimed' in t['status']]
-                
-                st.markdown(f"**Pending Orders Needing WhatsApp POP Verification:** `{len(pending_tkts)}`")
-                
-                for t in pending_tkts:
-                    with st.expander(f"⏳ Order Ref #{t['ticket_id']} — {t['buyer']} ({t['event_title']})", expanded=True):
-                        col1, col2 = st.columns([2, 3])
-                        with col1:
-                            st.write(f"**Buyer Email:** {t['email']}")
-                            st.write(f"**Qty Purchased:** {t['qty']} Ticket(s)")
-                            st.write(f"**Total Amount Due:** BWP {t['total_paid']:,.2f}")
-                            st.write(f"**Payment Method:** {t['payment_method']}")
-                        
-                        with col2:
-                            pop_ref = st.text_input("Enter Received WhatsApp POP / Bank Ref #", key=f"owner_pop_input_{t['ticket_id']}")
-                            pop_file = st.file_uploader("Upload POP Screenshot (Optional)", type=["png", "jpg", "jpeg"], key=f"owner_pop_file_{t['ticket_id']}")
-                            
-                            if st.button("✅ CAPTURE POP & RELEASE TICKET PASS", key=f"rel_tkt_btn_{t['ticket_id']}", type="primary"):
-                                final_ref = pop_ref if pop_ref else "WhatsApp POP Confirmed"
-                                if pop_file is not None:
-                                    final_ref += " (Img Uploaded)"
+      const found = appData.tickets.filter(t => t.email.toLowerCase() === email.toLowerCase());
+      if (found.length === 0) {
+        resultsContainer.innerHTML = `<p class="text-xs text-rose-600 text-center font-semibold">No admission passes found for this email.</p>`;
+        return;
+      }
 
-                                conn.execute("""
-                                    UPDATE tickets 
-                                    SET status = 'Verified / Active', pop_reference = ? 
-                                    WHERE ticket_id = ?
-                                """, (final_ref, t['ticket_id']))
-                                conn.commit()
-                                st.success(f"🎟️ Ticket Pass #{t['ticket_id']} for {t['buyer']} RELEASED!")
-                                st.rerun()
+      resultsContainer.innerHTML = found.map(t => `
+        <div class="border border-slate-200 rounded p-4 bg-slate-50 flex justify-between items-center">
+          <div>
+            <strong class="text-sm text-slate-900 block">${t.event_title}</strong>
+            <span class="text-xs text-slate-500">ID: ${t.ticket_id} | Qty: ${t.qty}</span>
+          </div>
+          <button onclick='openTicketModal(${JSON.stringify(t)})' class="bg-slate-900 text-white text-xs px-3 py-1.5 rounded hover:bg-amber-600 transition">
+            View Ticket Pass
+          </button>
+        </div>
+      `).join('');
+    }
 
-                if released_tkts:
-                    st.divider()
-                    st.markdown(f"**Released / Verified Ticket Passes ({len(released_tkts)}):**")
-                    for rt in released_tkts:
-                        qr_b64 = generate_qr_code_base64(rt['verification_hash'])
-                        with st.expander(f"✅ Pass #{rt['ticket_id']} — {rt['buyer']} | Status: {rt['status']}"):
-                            st.markdown(f"""
-                                <div class="ticket-pass">
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <h3 style="margin:0;">{rt['event_title']}</h3>
-                                        <span style="background:#10B981; color:white; padding:4px 8px; border-radius:8px; font-size:0.75rem;">VERIFIED</span>
-                                    </div>
-                                    <hr>
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <div style="text-align:left;">
-                                            <p style="margin:2px 0;"><b>BUYER:</b> {rt['buyer']}</p>
-                                            <p style="margin:2px 0;"><b>QTY:</b> {rt['qty']} Pass(es)</p>
-                                            <p style="margin:2px 0;"><b>POP REF:</b> {rt['pop_reference']}</p>
-                                            <p style="margin:2px 0; font-family:monospace; color:#D97706;"><b>HASH:</b> {rt['verification_hash']}</p>
-                                        </div>
-                                        <img src="{qr_b64}" style="width:90px; height:90px;">
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
+    function openTicketModal(ticket) {
+      document.getElementById('modal-event-title').innerText = ticket.event_title;
+      document.getElementById('modal-venue-name').innerText = ticket.venue_name;
+      document.getElementById('modal-buyer-name').innerText = ticket.buyer;
+      document.getElementById('modal-event-date').innerText = ticket.created_at.split('T')[0];
+      document.getElementById('modal-pass-qty').innerText = `${ticket.qty} Guest Pass(es)`;
+      document.getElementById('modal-ticket-id').innerText = ticket.verification_hash;
 
-        with tab_reports:
-            st.markdown("##### Detailed Facility Booking & Sales Audit Ledger")
-            if not v_bookings:
-                st.info("No bookings recorded to date.")
-            else:
-                table_data = []
-                for b in v_bookings:
-                    table_data.append({
-                        "Booking Ref": b['booking_id'],
-                        "Space Name": b['space_name'],
-                        "Client Name": b['customer_name'],
-                        "Event Date": b['booking_date'],
-                        "Amount (BWP)": f"{b['venue_cost']:,.2f}",
-                        "Status": b['status'],
-                        "POP Ref": b['pop_reference'] or "Pending"
-                    })
-                st.dataframe(table_data, use_container_width=True)
+      // Render QR Code
+      const qrContainer = document.getElementById('qrcode-container');
+      qrContainer.innerHTML = "";
+      new QRCode(qrContainer, {
+        text: ticket.verification_hash,
+        width: 120,
+        height: 120
+      });
 
-    conn.close()
+      document.getElementById('ticket-modal').classList.remove('hidden');
+    }
 
-# ---------------------------------------------------------
-# 7. MODULE 3: VENDOR PORTAL & SERVICE FULFILLMENT
-# ---------------------------------------------------------
-elif user_role == "Vendor Portal & Service Fulfillment":
-    st.markdown("<div class='exec-title'>Vendor Portal & Service Fulfillment</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Ancillary Service Provider Management Console</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
+    function closeTicketModal() {
+      document.getElementById('ticket-modal').classList.add('hidden');
+    }
 
-    if not st.session_state["authenticated"] or st.session_state["user_role"] != "Supporter":
-        st.info("🔒 Service Provider Authentication Required")
-        v_login_tab, v_reg_tab = st.tabs(["Vendor Account Login", "Register Service Entity"])
-        
-        with v_login_tab:
-            with st.form("vendor_login_form"):
-                st.markdown("<div class='form-label'>Corporate Email Address</div>", unsafe_allow_html=True)
-                vl_email = st.text_input("", label_visibility="collapsed", key="v_login_email")
-                st.markdown("<div class='form-label'>Account Password</div>", unsafe_allow_html=True)
-                vl_pw = st.text_input("", type="password", label_visibility="collapsed", key="v_login_pw")
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.form_submit_button("AUTHENTICATE VENDOR WORKSPACE", type="primary", use_container_width=True):
-                    user = conn.execute("SELECT * FROM users WHERE email = ? AND role = 'Supporter'", (vl_email,)).fetchone()
-                    if user and verify_pw(vl_pw, user['password_hash'], user['salt']):
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_email"] = vl_email
-                        st.session_state["user_role"] = "Supporter"
-                        st.session_state["tenant_id"] = user['tenant_id']
-                        st.success("Authentication successful!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid vendor credentials.")
+    // ---------------------------------------------------------
+    // 5. MODULE 2: VENUE OPERATIONS & METRICS
+    // ---------------------------------------------------------
+    function renderVenueOpsUI() {
+      const venue = appData.venues[0];
+      if (!venue) return;
 
-        with v_reg_tab:
-            with st.form("reg_vendor_form"):
-                vc1, vc2 = st.columns(2)
-                with vc1:
-                    v_biz = st.text_input("Business Name*")
-                    v_cat = st.selectbox("Service Category", ["Catering", "Audio Visual", "Security", "Decor", "Photography"])
-                    v_email = st.text_input("Corporate Email*")
-                    v_pw = st.text_input("Account Password*", type="password")
-                with vc2:
-                    v_contact = st.text_input("Contact Person Name*")
-                    v_phone = st.text_input("Direct Telephone Line*")
-                    v_bank = st.text_area("Settlement Bank Details*")
-                
-                v_logo_file = st.file_uploader("Corporate Vendor Logo", type=["png", "jpg", "jpeg"], key="reg_vendor_logo")
+      document.getElementById('ops-venue-name').value = venue.name;
+      document.getElementById('ops-venue-capacity').value = venue.max_capacity;
+      document.getElementById('ops-venue-whatsapp').value = venue.whatsapp_no;
+      document.getElementById('ops-venue-tax').value = venue.tax_id;
+      document.getElementById('ops-venue-bank').value = venue.bank_details;
 
-                if st.form_submit_button("REGISTER VENDOR ENTITY", type="primary", use_container_width=True):
-                    if v_biz and v_email and v_pw:
-                        s_id = f"SUP-{int(datetime.datetime.now().timestamp())}"
-                        pw_hash, salt = hash_pw(v_pw)
-                        v_logo_str = process_compressed_image_upload(v_logo_file, DEFAULT_LOGO, max_dim=400)
-                        
-                        try:
-                            conn.execute("INSERT INTO users VALUES (?, ?, ?, ?, 'Supporter', ?)", (f"USR-{s_id}", v_email, pw_hash, salt, s_id))
-                            conn.execute("""INSERT INTO supporters (supporter_id, business_name, category, contact_person, email, phone, bank_details, brand_color, logo_url)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, '#0F172A', ?)""",
-                                         (s_id, v_biz, v_cat, v_contact, v_email, v_phone, v_bank, v_logo_str))
-                            conn.commit()
-                            st.success("Vendor profile registered successfully!")
-                        except sqlite3.IntegrityError:
-                            st.error("Email is already registered.")
-    else:
-        sup_id = st.session_state["tenant_id"]
-        supporter = conn.execute("SELECT * FROM supporters WHERE supporter_id = ?", (sup_id,)).fetchone()
-        
-        st.subheader(f"Vendor Workspace: {supporter['business_name']}")
-        
-        v_tab_catalog, v_tab_orders = st.tabs(["📦 Service Tariff Catalog", "📋 Active Service Orders"])
-        
-        with v_tab_catalog:
-            with st.form("add_template_form"):
-                st.markdown("##### Add New Service Package")
-                tc1, tc2 = st.columns(2)
-                item_name = tc1.text_input("Service Item Name (e.g. Executive Buffet)")
-                unit_type = tc2.selectbox("Unit Basis", ["Per Person", "Per Day", "Flat Fee", "Per Hour"])
-                unit_price = tc1.number_input("Unit Price (BWP)", min_value=0.0, value=250.0)
-                item_desc = tc2.text_area("Service Specs / Inclusions")
-                item_img = st.file_uploader("Catalog Photo", type=["png", "jpg", "jpeg"])
-                
-                if st.form_submit_button("PUBLISH SERVICE TARIFF"):
-                    if item_name:
-                        img_str = process_compressed_image_upload(item_img, "", max_dim=400)
-                        conn.execute("""INSERT INTO vendor_templates (supporter_id, item_name, description, unit_type, unit_price, image_url)
-                                        VALUES (?, ?, ?, ?, ?, ?)""", (sup_id, item_name, item_desc, unit_type, unit_price, img_str))
-                        conn.commit()
-                        st.success("Service package added successfully!")
-                        st.rerun()
+      // Update Metrics
+      document.getElementById('metric-bookings-count').innerText = appData.bookings.length;
+      document.getElementById('metric-spaces-count').innerText = appData.spaces.length;
+      
+      const rev = appData.bookings.reduce((sum, b) => sum + (b.venue_cost || 0), 0);
+      document.getElementById('metric-venue-revenue').innerText = `BWP ${rev.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+    }
 
-            st.divider()
-            st.markdown("##### Current Service Catalog")
-            templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ?", (sup_id,)).fetchall()
-            for t in templates:
-                st.write(f"**{t['item_name']}** — BWP {t['unit_price']:,.2f} / {t['unit_type']}")
+    function saveVenueSettings(e) {
+      e.preventDefault();
+      const venue = appData.venues[0];
+      if (!venue) return;
 
-        with v_tab_orders:
-            st.markdown("##### Service Invoices & Orders")
-            vinvs = conn.execute("SELECT * FROM vendor_invoices WHERE supporter_id = ?", (sup_id,)).fetchall()
-            if not vinvs:
-                st.info("No active service orders found.")
-            else:
-                for vi in vinvs:
-                    st.write(f"**Invoice #{vi['vendor_invoice_id']}** | Event Date: {vi['event_date']} | Status: {vi['status']} | Total: BWP {vi['total_amount']:,.2f}")
-    
-    conn.close()
+      venue.name = document.getElementById('ops-venue-name').value;
+      venue.max_capacity = parseInt(document.getElementById('ops-venue-capacity').value);
+      venue.whatsapp_no = document.getElementById('ops-venue-whatsapp').value;
+      venue.tax_id = document.getElementById('ops-venue-tax').value;
+      venue.bank_details = document.getElementById('ops-venue-bank').value;
 
-# ---------------------------------------------------------
-# 8. MODULE 4: ACCESS CONTROL & VERIFICATION SUITE
-# ---------------------------------------------------------
-elif user_role == "Access Control & Verification Suite":
-    st.markdown("<div class='exec-title'>Access Control & Gate Scanner Suite</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Real-Time QR Admission Pass Verification</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
-    
-    scan_hash = st.text_input("Enter Pass Security Hash / Scan String:", placeholder="HASH-XXXXXXXXXX")
-    
-    if st.button("VERIFY & PROCESS ADMISSION PASS", type="primary"):
-        if scan_hash:
-            ticket = conn.execute("SELECT * FROM tickets WHERE verification_hash = ?", (scan_hash,)).fetchone()
-            if not ticket:
-                st.error("❌ INVALID TICKET PASS: Hash reference not found in master ledger.")
-            elif ticket['status'] == 'Admitted / Claimed':
-                st.error(f"❌ REJECTED - PASS ALREADY USED: Claimed at {ticket['scanned_at']}")
-            elif 'Pending' in ticket['status']:
-                st.warning(f"⚠️ ADMISSION DENIED: Settlement Status is '{ticket['status']}'. Payment verification required.")
-            elif ticket['status'] == 'Verified / Active':
-                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                conn.execute("UPDATE tickets SET status = 'Admitted / Claimed', scanned_at = ? WHERE ticket_id = ?", (now_str, ticket['ticket_id']))
-                conn.commit()
-                st.balloons()
-                st.success(f"✅ ACCESS GRANTED: Welcome {ticket['buyer']}! Pass validated ({ticket['qty']} Person Admission).")
-        else:
-            st.warning("Please enter a valid ticket security hash.")
-            
-    conn.close()
+      saveStorage();
+      alert("Facility profile updated successfully!");
+    }
 
-# ---------------------------------------------------------
-# 9. MODULE 5: EXECUTIVE MASTER LEDGER & AUDIT SUITE
-# ---------------------------------------------------------
-elif user_role == "Executive Master Ledger & Audit Suite":
-    st.markdown("<div class='exec-title'>Executive Master Ledger & Settlement Audit</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Financial Oversight, Proof-of-Payment Verification & Reconciliation</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
-    
-    if not st.session_state["authenticated"] or st.session_state["user_role"] != "Auditor":
-        st.info("🔒 Auditor / Executive Clearance Required")
-        with st.form("audit_login_form"):
-            a_email = st.text_input("Auditor Email Address")
-            a_pw = st.text_input("Master Password", type="password")
-            if st.form_submit_button("AUTHENTICATE AUDIT CONSOLE", type="primary", use_container_width=True):
-                if a_email == "admin@executive.co.bw" and a_pw == "AdminPass123!":
-                    st.session_state["authenticated"] = True
-                    st.session_state["user_email"] = a_email
-                    st.session_state["user_role"] = "Auditor"
-                    st.success("Master Clearance Granted.")
-                    st.rerun()
-                else:
-                    st.error("Invalid audit credentials.")
-    else:
-        st.subheader("Global Settlement Audit Console")
-        
-        tab_v_settle, tab_tkt_settle = st.tabs(["🏛️ Venue & Vendor Bookings Settlement", "🎟️ Ticket Sales Settlement"])
-        
-        with tab_v_settle:
-            st.markdown("##### Venue Hire & Vendor Invoices Reconciliation")
-            bookings = conn.execute("SELECT * FROM bookings").fetchall()
-            for b in bookings:
-                with st.expander(f"Booking #{b['booking_id']} — {b['customer_name']} (BWP {b['venue_cost']:,.2f}) — Status: {b['status']}"):
-                    st.write(f"**Venue Asset:** {b['space_name']} | **Event Date:** {b['booking_date']}")
-                    st.write(f"**Contact Email:** {b['customer_email']} | **Phone:** {b['customer_phone']}")
-                    st.write(f"**Payment Method:** {b['payment_method']} | **POP Reference:** {b['pop_reference'] or 'None Provided'}")
-                    
-                    pop_ref = st.text_input(f"Proof of Payment Ref for {b['booking_id']}", value=b['pop_reference'] or "", key=f"pop_b_{b['booking_id']}")
-                    
-                    c1, c2 = st.columns(2)
-                    if c1.button("APPROVE PAYMENT & CONFIRM RESERVATION", key=f"app_b_{b['booking_id']}"):
-                        conn.execute("UPDATE bookings SET status = 'Settled & Confirmed', pop_reference = ? WHERE booking_id = ?", (pop_ref, b['booking_id']))
-                        conn.commit()
-                        st.success("Booking status updated to Settled & Confirmed.")
-                        st.rerun()
-                    if c2.button("CANCEL RESERVATION", key=f"can_b_{b['booking_id']}"):
-                        conn.execute("UPDATE bookings SET status = 'Cancelled' WHERE booking_id = ?", (b['booking_id'],))
-                        conn.commit()
-                        st.warning("Booking marked as Cancelled.")
-                        st.rerun()
+    function publishPublicEvent(e) {
+      e.preventDefault();
+      const venue = appData.venues[0];
 
-        with tab_tkt_settle:
-            st.markdown("##### Box Office Ticket Pass Reconciliations")
-            tkts = conn.execute("SELECT * FROM tickets").fetchall()
-            for t in tkts:
-                with st.expander(f"Pass #{t['ticket_id']} — {t['buyer']} ({t['event_title']}) — Status: {t['status']}"):
-                    st.write(f"**Qty:** {t['qty']} | **Total Paid:** BWP {t['total_paid']:,.2f} | **Method:** {t['payment_method']}")
-                    st.write(f"**Security Hash:** `{t['verification_hash']}`")
-                    
-                    tkt_pop = st.text_input(f"POP Reference for {t['ticket_id']}", value=t['pop_reference'] or "", key=f"pop_t_{t['ticket_id']}")
-                    if st.button("VERIFY WhatsApp POP & RELEASE ACTIVE TICKET PASS", key=f"app_t_{t['ticket_id']}"):
-                        conn.execute("UPDATE tickets SET status = 'Verified / Active', pop_reference = ? WHERE ticket_id = ?", (tkt_pop, t['ticket_id']))
-                        conn.commit()
-                        st.success("Ticket pass activated and released!")
-                        st.rerun()
+      const newEvent = {
+        event_id: "EVT-" + Date.now(),
+        venue_id: venue.venue_id,
+        venue_name: venue.name,
+        title: document.getElementById('ops-event-title').value,
+        date: document.getElementById('ops-event-date').value,
+        price: parseFloat(document.getElementById('ops-event-price').value),
+        description: document.getElementById('ops-event-desc').value,
+        flyer_url: document.getElementById('ops-event-flyer').value || SPACE_PRESETS[0]
+      };
 
-    conn.close()
+      appData.events.push(newEvent);
+      saveStorage();
+      renderPublicEvents();
+      alert("Public event published to market hub!");
+    }
+
+    // ---------------------------------------------------------
+    // 6. MODULE 3: VENDOR MANAGEMENT
+    // ---------------------------------------------------------
+    function renderVendorUI() {
+      const tableBody = document.getElementById('vendor-orders-table-body');
+      if (appData.vendor_invoices.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-xs text-slate-500">No vendor service orders currently dispatched.</td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = appData.vendor_invoices.map(inv => `
+        <tr class="hover:bg-slate-50 text-xs">
+          <td class="p-3 font-mono font-bold">${inv.vendor_invoice_id}</td>
+          <td class="p-3">${inv.venue_name}</td>
+          <td class="p-3">${inv.customer_name}<br><span class="text-slate-400">${inv.customer_email}</span></td>
+          <td class="p-3">${inv.event_date}</td>
+          <td class="p-3 font-bold">BWP ${inv.total_amount.toLocaleString()}</td>
+          <td class="p-3"><span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">${inv.status}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function addVendorItem(e) {
+      e.preventDefault();
+      const supporter = appData.supporters[0];
+
+      const newItem = {
+        template_id: Date.now(),
+        supporter_id: supporter.supporter_id,
+        item_name: document.getElementById('vnd-item-name').value,
+        unit_price: parseFloat(document.getElementById('vnd-item-price').value),
+        unit_type: document.getElementById('vnd-item-unit').value,
+        description: "Standard service package offering."
+      };
+
+      appData.vendor_templates.push(newItem);
+      saveStorage();
+      renderVendorAccordion();
+      alert("Service package added to active catalog!");
+    }
+
+    // ---------------------------------------------------------
+    // 7. MODULE 4: ACCESS CONTROL & VERIFICATION
+    // ---------------------------------------------------------
+    function verifyTicketPass() {
+      const code = document.getElementById('scan-ticket-id').value.trim();
+      const card = document.getElementById('scan-result-card');
+      card.classList.remove('hidden');
+
+      const ticket = appData.tickets.find(t => t.verification_hash === code || t.ticket_id === code);
+
+      if (!ticket) {
+        card.className = "p-4 rounded border text-center space-y-2 bg-rose-50 border-rose-300 text-rose-900";
+        card.innerHTML = `
+          <i class="fa-solid fa-circle-xmark text-3xl text-rose-600"></i>
+          <h4 class="font-bold text-base">INVALID ADMISSION PASS</h4>
+          <p class="text-xs">No active pass matched this hash or reference code.</p>
+        `;
+      } else if (ticket.status === "Scanned / Used") {
+        card.className = "p-4 rounded border text-center space-y-2 bg-amber-50 border-amber-300 text-amber-900";
+        card.innerHTML = `
+          <i class="fa-solid fa-triangle-exclamation text-3xl text-amber-600"></i>
+          <h4 class="font-bold text-base">PASS ALREADY REDEEMED</h4>
+          <p class="text-xs">Ticket was previously scanned at: ${ticket.scanned_at}</p>
+        `;
+      } else {
+        ticket.status = "Scanned / Used";
+        ticket.scanned_at = new Date().toLocaleTimeString();
+        saveStorage();
+
+        card.className = "p-4 rounded border text-center space-y-2 bg-emerald-50 border-emerald-300 text-emerald-900";
+        card.innerHTML = `
+          <i class="fa-solid fa-circle-check text-3xl text-emerald-600"></i>
+          <h4 class="font-bold text-base">ENTRY GRANTED</h4>
+          <p class="text-xs"><strong>Event:</strong> ${ticket.event_title}</p>
+          <p class="text-xs"><strong>Attendee:</strong> ${ticket.buyer} (${ticket.qty} Guest Pass)</p>
+        `;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 8. MODULE 5: MASTER LEDGER
+    // ---------------------------------------------------------
+    function renderLedgerUI() {
+      const tableBody = document.getElementById('ledger-table-body');
+      if (appData.bookings.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-xs text-slate-500">No master bookings recorded in ledger.</td></tr>`;
+        return;
+      }
+
+      tableBody.innerHTML = appData.bookings.map(b => `
+        <tr class="hover:bg-slate-50 text-xs">
+          <td class="p-3 font-mono font-bold">${b.booking_id}</td>
+          <td class="p-3">${b.customer_name}<br><span class="text-slate-400">${b.customer_email}</span></td>
+          <td class="p-3">${b.space_name} (${b.days} Days)</td>
+          <td class="p-3">${b.booking_date}</td>
+          <td class="p-3 font-bold">BWP ${b.venue_cost.toLocaleString()}</td>
+          <td class="p-3"><span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded">${b.status}</span></td>
+          <td class="p-3">
+            <button onclick="downloadVenuePDF('${b.booking_id}')" class="text-slate-900 hover:text-amber-600 font-bold">
+              <i class="fa-solid fa-file-pdf"></i> PDF
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // ---------------------------------------------------------
+    // 9. CLIENT-SIDE PDF INVOICE GENERATOR (jsPDF Engine)
+    // ---------------------------------------------------------
+    function downloadVenuePDF(bookingId) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const booking = appData.bookings.find(b => b.booking_id === bookingId);
+      const venue = appData.venues.find(v => v.venue_id === booking.venue_id);
+
+      // Header Branding
+      doc.setFillColor(15, 23, 42); // slate-900
+      doc.rect(0, 0, 210, 30, 'F');
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("OFFICIAL TAX INVOICE", 14, 18);
+      
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(venue.name.toUpperCase(), 14, 25);
+
+      // Metadata Box
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9);
+      doc.text(`Invoice Ref: ${booking.booking_id}`, 14, 42);
+      doc.text(`Date Issued: ${booking.created_at}`, 14, 48);
+      doc.text(`Tax / CIPA Reg ID: ${venue.tax_id}`, 14, 54);
+
+      doc.text(`Billed To: ${booking.customer_name}`, 120, 42);
+      doc.text(`Client Email: ${booking.customer_email}`, 120, 48);
+      doc.text(`Contact Phone: ${booking.customer_phone}`, 120, 54);
+
+      // Line Items Table Header
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, 65, 182, 8, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.text("Description", 18, 70);
+      doc.text("Days", 110, 70);
+      doc.text("Rate (BWP)", 140, 70);
+      doc.text("Total (BWP)", 170, 70);
+
+      // Line Item
+      doc.setFont("helvetica", "normal");
+      doc.text(`Venue Hire: ${booking.space_name}`, 18, 80);
+      doc.text(`${booking.days}`, 110, 80);
+      doc.text(`${(booking.venue_cost / booking.days).toFixed(2)}`, 140, 80);
+      doc.text(`${booking.venue_cost.toFixed(2)}`, 170, 80);
+
+      // Divider & Total
+      doc.line(14, 90, 196, 90);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text("TOTAL DUE:", 120, 100);
+      doc.text(`BWP ${booking.venue_cost.toLocaleString(undefined, {minimumFractionDigits: 2})}`, 170, 100);
+
+      // Settlement Details
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Bank Settlement Details:", 14, 115);
+      doc.setFont("helvetica", "normal");
+      doc.text(venue.bank_details, 14, 122);
+
+      // Download Trigger
+      doc.save(`Invoice_${booking.booking_id}.pdf`);
+    }
+
+    // ---------------------------------------------------------
+    // INITIALIZATION ON LOAD
+    // ---------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      loadStorage();
+      initMarketplaceUI();
+    });
+  </script>
+</body>
+</html>
