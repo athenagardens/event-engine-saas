@@ -28,7 +28,7 @@ def init_db():
     c = conn.cursor()
     
     # Auth Users
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
+    c.execute('''CREATE TABLE IF NOT EXISTS users(
         user_id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, salt TEXT, role TEXT, tenant_id TEXT
     )''')
 
@@ -111,8 +111,8 @@ def verify_pw(password, pwd_hash, salt):
     test_hash, _ = hash_pw(password, salt)
     return test_hash == pwd_hash
 
-def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=400):
-    """Resizes and compresses images to a lightweight max 400x400 format."""
+def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=800):
+    """Resizes and compresses images to a lightweight format."""
     if uploaded_file is not None:
         try:
             img = Image.open(uploaded_file)
@@ -121,77 +121,86 @@ def process_compressed_image_upload(uploaded_file, fallback_url, max_dim=400):
                 img = img.convert("RGB")
             
             buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=75, optimize=True)
+            img.save(buffer, format="JPEG", quality=85, optimize=True)
             b64_str = base64.b64encode(buffer.getvalue()).decode()
             return f"data:image/jpeg;base64,{b64_str}"
         except Exception:
             return fallback_url
     return fallback_url
 
-def generate_branded_flyer(venue_name, event_title, event_date, price, start_time="18:00", end_time="23:00", comments="", uploaded_bg_file=None, brand_color="#0F172A"):
-    """Generates a compact, clear event flyer canvas scaled to 400x500."""
-    width, height = 400, 500
+def generate_branded_flyer(venue_name, event_title, event_date, price, start_time="18:00", end_time="23:00", comments="", uploaded_bg_file=None, brand_color="#D97706"):
+    """Generates a light-colored standard digital flyer (500x700 px) with large readable text."""
+    width, height = 500, 700
 
     if uploaded_bg_file is not None:
         try:
             bg_img = Image.open(uploaded_bg_file).convert("RGB")
-            bg_img.thumbnail((width, height))
+            bg_img = bg_img.resize((width, height))
             
-            overlay = Image.new("RGBA", (width, height), (15, 23, 42, 215))
-            img = bg_img.convert("RGBA").resize((width, height))
-            img = Image.alpha_composite(img, overlay).convert("RGB")
+            # Semi-transparent light overlay so dark text is easily readable
+            overlay = Image.new("RGBA", (width, height), (255, 255, 255, 210))
+            img = Image.alpha_composite(bg_img.convert("RGBA"), overlay).convert("RGB")
         except Exception:
-            img = Image.new("RGB", (width, height), color="#0F172A")
+            img = Image.new("RGB", (width, height), color="#F8FAFC")
     else:
-        img = Image.new("RGB", (width, height), color="#0F172A")
+        img = Image.new("RGB", (width, height), color="#F8FAFC")
 
     draw = ImageDraw.Draw(img)
     
-    draw.rectangle([(0, 0), (width, 60)], fill=brand_color)
-    draw.rectangle([(8, 8), (width-8, height-8)], outline="#D97706", width=2)
+    # Outer Border & Light Header Band
+    draw.rectangle([(0, 0), (width, 80)], fill="#0F172A")
+    draw.rectangle([(10, 10), (width-10, height-10)], outline=brand_color, width=3)
     
     try:
-        font_header = ImageFont.truetype("arial.ttf", 18)
-        font_title = ImageFont.truetype("arialbd.ttf", 22)
-        font_sub = ImageFont.truetype("arialbd.ttf", 14)
-        font_body = ImageFont.truetype("arial.ttf", 12)
-        font_small = ImageFont.truetype("arial.ttf", 10)
+        font_header = ImageFont.truetype("arialbd.ttf", 22)
+        font_title = ImageFont.truetype("arialbd.ttf", 28)
+        font_sub = ImageFont.truetype("arialbd.ttf", 18)
+        font_body = ImageFont.truetype("arial.ttf", 15)
+        font_small = ImageFont.truetype("arial.ttf", 12)
     except IOError:
         font_header = font_title = font_sub = font_body = font_small = ImageFont.load_default()
         
-    draw.text((width//2, 30), venue_name.upper(), fill="#FFFFFF", font=font_header, anchor="mm")
-    draw.text((width//2, 90), event_title, fill="#F59E0B", font=font_title, anchor="mm")
-    draw.line([(40, 115), (width-40, 115)], fill="#CBD5E1", width=1)
+    # Venue Name (Top Banner)
+    draw.text((width//2, 40), venue_name.upper(), fill="#FFFFFF", font=font_header, anchor="mm")
     
-    draw.text((width//2, 140), f"DATE: {event_date}", fill="#FFFFFF", font=font_sub, anchor="mm")
-    draw.text((width//2, 165), f"TIME: {start_time} - {end_time}", fill="#38BDF8", font=font_sub, anchor="mm")
-    draw.text((width//2, 210), f"ADMISSION: BWP {price:,.2f}", fill="#10B981", font=font_title, anchor="mm")
+    # Event Title
+    draw.text((width//2, 130), event_title, fill="#0F172A", font=font_title, anchor="mm")
+    draw.line([(50, 160), (width-50, 160)], fill=brand_color, width=2)
     
+    # Date & Time Section
+    draw.text((width//2, 200), f"DATE: {event_date}", fill="#1E293B", font=font_sub, anchor="mm")
+    draw.text((width//2, 235), f"TIME: {start_time} - {end_time}", fill="#0284C7", font=font_sub, anchor="mm")
+    
+    # Price Tag Badge
+    draw.rectangle([(80, 275), (width-80, 335)], fill="#0F172A", outline=brand_color, width=2)
+    draw.text((width//2, 305), f"ADMISSION: BWP {price:,.2f}", fill="#F59E0B", font=font_sub, anchor="mm")
+    
+    # Event Comments / Details Box
     if comments:
-        draw.rectangle([(30, 240), (width-30, 430)], fill=(0, 0, 0, 150), outline="#D97706", width=1)
-        draw.text((width//2, 260), "— EVENT DETAILS —", fill="#D97706", font=font_sub, anchor="mm")
+        draw.rectangle([(30, 360), (width-30, 620)], fill="#FFFFFF", outline="#CBD5E1", width=2)
+        draw.text((width//2, 390), "— EVENT DETAILS —", fill=brand_color, font=font_sub, anchor="mm")
         
         words = comments.split()
         lines = []
         current_line = []
         for word in words:
             current_line.append(word)
-            if len(" ".join(current_line)) > 35:
+            if len(" ".join(current_line)) > 32:
                 current_line.pop()
                 lines.append(" ".join(current_line))
                 current_line = [word]
         if current_line:
             lines.append(" ".join(current_line))
             
-        y_offset = 290
-        for line in lines[:5]:
-            draw.text((width//2, y_offset), line, fill="#F8FAFC", font=font_body, anchor="mm")
-            y_offset += 20
+        y_offset = 430
+        for line in lines[:7]:
+            draw.text((width//2, y_offset), line, fill="#334155", font=font_body, anchor="mm")
+            y_offset += 25
 
-    draw.text((width//2, 475), "OFFICIAL ADMISSION PASS — EXECUTIVE EVENT HUB", fill="#94A3B8", font=font_small, anchor="mm")
+    draw.text((width//2, 660), "OFFICIAL ADMISSION PASS — EXECUTIVE EVENT HUB", fill="#64748B", font=font_small, anchor="mm")
     
     buffer = io.BytesIO()
-    img.save(buffer, format="JPEG", quality=80)
+    img.save(buffer, format="JPEG", quality=90)
     b64_str = base64.b64encode(buffer.getvalue()).decode()
     return f"data:image/jpeg;base64,{b64_str}"
 
@@ -339,34 +348,25 @@ st.markdown("""
         .exec-card {
             background-color: #FFFFFF;
             padding: 1.25rem;
-            border-radius: 4px;
+            border-radius: 6px;
             border: 1px solid #E2E8F0;
             border-top: 3px solid #0F172A;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             margin-bottom: 1rem;
         }
 
-        .metric-card {
-            background-color: #FFFFFF;
-            border: 1px solid #E2E8F0;
-            border-left: 4px solid #D97706;
-            padding: 15px;
-            border-radius: 4px;
-            text-align: center;
-        }
-
         .ticket-pass {
             background: #FFFFFF;
             border: 2px dashed #0F172A;
             border-radius: 8px;
-            padding: 15px;
+            padding: 20px;
             text-align: center;
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
         }
 
         .form-label {
             font-weight: 700;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: #1E293B;
@@ -468,13 +468,13 @@ if user_role == "Enterprise Marketplace & Event Hub":
             col1, col2 = st.columns([1, 2])
             col1.image(sel_venue['flyer_image_url'] or SPACE_PRESETS[0], use_container_width=True)
             col2.markdown(f"""
-                <div class="exec-card" style="border-top-color:{sel_venue['brand_color']}; margin-bottom:0;">
+                <div class="exec-card" style="border-top-color:{sel_venue['brand_color'] or '#D97706'}; margin-bottom:0;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <h2 style="margin:0; font-family:'Playfair Display', serif;">{sel_venue['name']}</h2>
                         <img src="{sel_venue['logo_url'] or DEFAULT_LOGO}" style="background:white; padding:4px; border:1px solid #E2E8F0; border-radius:4px; height: 50px;">
                     </div>
                     <hr style="margin:1rem 0; border:0; border-top:1px solid #E2E8F0;">
-                    <p style="margin:0; font-size:0.9rem;">
+                    <p style="margin:0; font-size:0.95rem; color:#334155;">
                         <b>LOCATION:</b> {sel_venue['address']}<br>
                         <b>LICENSED CAPACITY:</b> {sel_venue['max_capacity']:,} Guests<br>
                         <b>WHATSAPP VERIFICATION LINE:</b> {sel_venue['whatsapp_no']}
@@ -614,7 +614,18 @@ if user_role == "Enterprise Marketplace & Event Hub":
             for ev in events:
                 v = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (ev['venue_id'],)).fetchone()
                 col1, col2 = st.columns([1, 2])
-                col1.image(ev['flyer_url'] or SPACE_PRESETS[0], use_container_width=True)
+                
+                # Dynamic flyer visual generation with Light Theme & Background Image Support
+                flyer_b64 = generate_branded_flyer(
+                    venue_name=ev['venue_name'],
+                    event_title=ev['title'],
+                    event_date=ev['date'],
+                    price=ev['price'],
+                    comments=ev['description'],
+                    uploaded_bg_file=ev['flyer_url'] if ev['flyer_url'] and os.path.exists(ev['flyer_url']) else None
+                )
+                col1.image(flyer_b64, use_container_width=True)
+                
                 col2.markdown(f"<h3 style='font-family: Playfair Display, serif; margin:0;'>{ev['title']}</h3>", unsafe_allow_html=True)
                 col2.write(f"**VENUE:** {ev['venue_name']} | **DATE:** {ev['date']} | **ADMISSION TARIFF:** BWP {ev['price']:,.2f}")
                 
@@ -628,606 +639,60 @@ if user_role == "Enterprise Marketplace & Event Hub":
                     with tc2:
                         st.markdown("<div class='form-label'>Email Address*</div>", unsafe_allow_html=True)
                         t_email = st.text_input("", label_visibility="collapsed", key=f"tkt_email_{ev['event_id']}")
-                        st.markdown("<div class='form-label'>Settlement Method</div>", unsafe_allow_html=True)
-                        t_pay = st.selectbox("", ["Direct Bank Wire Transfer", "eWallet", "Orange Money", "Pay2Cell"], label_visibility="collapsed", key=f"tkt_pay_{ev['event_id']}")
-                    
-                    if st.form_submit_button("SUBMIT TICKET ORDER"):
+                        st.markdown("<div class='form-label'>Payment Channel</div>", unsafe_allow_html=True)
+                        t_pay = st.selectbox("", ["Orange Money", "eWallet", "Card Payment", "Pay2Cell"], label_visibility="collapsed", key=f"tkt_pay_{ev['event_id']}")
+
+                    if st.form_submit_button("PURCHASE TICKET PASSES", type="primary", use_container_width=True):
                         if t_buyer and t_email:
-                            tkt_id = f"TKT-{int(datetime.datetime.now().timestamp())}"
-                            sec_hash = f"HASH-{hashlib.sha256(f'{tkt_id}-{t_email}'.encode()).hexdigest()[:10].upper()}"
+                            t_id = f"TKT-{int(datetime.datetime.now().timestamp())}"
+                            v_hash = hashlib.sha256(f"{t_id}{ev['event_id']}{t_email}".encode()).hexdigest()[:16]
+                            total_paid = ev['price'] * t_qty
                             
-                            conn.execute("""INSERT INTO tickets
+                            conn.execute("""INSERT INTO tickets 
                                 (ticket_id, verification_hash, event_id, event_title, venue_id, venue_name, venue_logo, buyer, email, qty, total_paid, payment_method, status)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending WhatsApp POP Verification')""",
-                                (tkt_id, sec_hash, ev['event_id'], ev['title'], v['venue_id'] if v else "", ev['venue_name'], v['logo_url'] if v else DEFAULT_LOGO, t_buyer, t_email, t_qty, t_qty*ev['price'], t_pay))
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE / VALID')""",
+                                (t_id, v_hash, ev['event_id'], ev['title'], ev['venue_id'], ev['venue_name'], v['logo_url'] if v else "", t_buyer, t_email, t_qty, total_paid, t_pay))
                             conn.commit()
-                            
-                            st.warning("⏳ Order Placed! Ticket pass is pending payment verification.")
-                            
-                            wa_num = v['whatsapp_no'] if v and v['whatsapp_no'] else ""
-                            st.info(f"👉 **Next Step:** Send your Proof of Payment (POP) along with Order Ref **`{tkt_id}`** via WhatsApp to **+{wa_num}** for verification before your ticket pass is released.")
-                            if wa_num:
-                                wa_link = f"https://wa.me/{wa_num}?text=Hello,%20here%20is%20my%20POP%20for%20Ticket%20Ref:%20{tkt_id}"
-                                st.markdown(f"[📲 Click Here to Open WhatsApp & Submit POP]({wa_link})")
+                            st.success(f"🎟️ Ticket Pass Issued Successfully! Ref ID: {t_id}")
                         else:
-                            st.error("Please enter required attendee details.")
+                            st.error("Please fill in attendee name and email address.")
+                st.divider()
         conn.close()
 
     with tab_my_passes:
-        st.markdown("##### Lookup & Print Your Verified Event Ticket Passes")
-        lookup_ref = st.text_input("Enter Order Ref or Email Address to View Released Ticket Pass:", placeholder="e.g. TKT-1700000000 or email@domain.com")
-        
-        if lookup_ref:
+        st.markdown("<h3 style='font-family: Playfair Display, serif;'>Lookup & Display My Ticket Passes</h3>", unsafe_allow_html=True)
+        search_email = st.text_input("Enter Email Address Used During Purchase:", key="lookup_email_pass")
+        if search_email:
             conn = get_db_connection()
-            query_tkts = conn.execute("""
-                SELECT * FROM tickets 
-                WHERE ticket_id = ? OR email = ?
-            """, (lookup_ref, lookup_ref)).fetchall()
-
-            if not query_tkts:
-                st.error("No ticket records found for the provided lookup reference.")
+            my_tkts = conn.execute("SELECT * FROM tickets WHERE email = ?", (search_email,)).fetchall()
+            if not my_tkts:
+                st.info("No active admission passes located for this email.")
             else:
-                for tkt in query_tkts:
-                    if 'Verified' in tkt['status'] or 'Claimed' in tkt['status']:
-                        qr_b64 = generate_qr_code_base64(tkt['verification_hash'])
-                        
-                        st.markdown(f"""
-                            <div class="ticket-pass">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <h2 style="margin:0; font-family:'Playfair Display', serif; color:#0F172A;">{tkt['event_title']}</h2>
-                                    <span style="background:#10B981; color:white; padding:4px 12px; border-radius:12px; font-size:0.8rem; font-weight:bold;">{tkt['status'].upper()}</span>
+                for tkt in my_tkts:
+                    qr_b64 = generate_qr_code_base64(f"TICKET_ID:{tkt['ticket_id']}|HASH:{tkt['verification_hash']}")
+                    ev = conn.execute("SELECT * FROM events WHERE event_id = ?", (tkt['event_id'],)).fetchone()
+                    
+                    # Light aesthetic layout ticket card design with background uploaded flyer support
+                    bg_style = f"background-image: linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.92)), url('{ev['flyer_url']}'); background-size: cover;" if (ev and ev['flyer_url']) else "background: #FFFFFF;"
+                    
+                    st.markdown(f"""
+                        <div class="ticket-pass" style="{bg_style} border-color: #D97706; margin-bottom: 20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <h3 style="margin:0; font-family:'Playfair Display', serif; color:#0F172A; font-size: 1.6rem;">{tkt['event_title']}</h3>
+                                <span style="background:#10B981; color:white; padding:4px 12px; border-radius:12px; font-weight:bold; font-size:0.8rem;">{tkt['status']}</span>
+                            </div>
+                            <hr style="margin: 0.8rem 0; border-top: 1px dashed #CBD5E1;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div style="text-align:left; color:#1E293B;">
+                                    <p style="margin:2px 0; font-size:1.05rem;"><b>ATTENDEE:</b> {tkt['buyer']}</p>
+                                    <p style="margin:2px 0; font-size:1.05rem;"><b>VENUE:</b> {tkt['venue_name']}</p>
+                                    <p style="margin:2px 0; font-size:1.05rem;"><b>PASS QUANTITY:</b> {tkt['qty']} Person(s)</p>
+                                    <p style="margin:2px 0; font-size:1.05rem;"><b>TICKET ID:</b> <code style="font-size:1.1rem; color:#D97706;">{tkt['ticket_id']}</code></p>
                                 </div>
-                                <hr style="margin:12px 0;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <div style="text-align:left;">
-                                        <p style="margin:4px 0;"><b>PASS REF:</b> {tkt['ticket_id']}</p>
-                                        <p style="margin:4px 0;"><b>ATTENDEE:</b> {tkt['buyer']}</p>
-                                        <p style="margin:4px 0;"><b>ADMIT QUANTITY:</b> {tkt['qty']} Person(s)</p>
-                                        <p style="margin:4px 0;"><b>VENUE:</b> {tkt['venue_name']}</p>
-                                        <p style="margin:4px 0; font-family:monospace; color:#D97706;"><b>SECURITY HASH:</b> {tkt['verification_hash']}</p>
-                                    </div>
-                                    <div>
-                                        <img src="{qr_b64}" style="width:120px; height:120px; border:1px solid #CBD5E1; padding:4px; border-radius:4px;">
-                                    </div>
+                                <div>
+                                    <img src="{qr_b64}" style="width:130px; border:2px solid #0F172A; border-radius:6px; padding:4px; background:white;">
                                 </div>
                             </div>
-                        """, unsafe_allow_html=True)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                    else:
-                        st.warning(f"⏳ Pass #{tkt['ticket_id']} for {tkt['event_title']} is still **{tkt['status']}**. Please contact the event owner or upload POP for release.")
+                        </div>
+                    """, unsafe_allow_html=True)
             conn.close()
-
-# ---------------------------------------------------------
-# 6. MODULE 2: VENUE OPERATIONS & ANALYTICS CONSOLE
-# ---------------------------------------------------------
-elif user_role == "Venue Operations & Analytics Console":
-    st.markdown("<div class='exec-title'>Venue Operations & Analytics Console</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Corporate Facility, Real-Time Statistics & Sub-Space Asset Suite</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
-
-    if not st.session_state["authenticated"] or st.session_state["user_role"] != "Facility Owner":
-        st.info("🔒 Facility Operator Authentication Required")
-        
-        login_tab, reg_tab = st.tabs(["Operator Workspace Login", "Register New Commercial Property"])
-        
-        with login_tab:
-            with st.form("fac_login_form"):
-                st.markdown("<div class='form-label'>Operator Email Address</div>", unsafe_allow_html=True)
-                l_email = st.text_input("", label_visibility="collapsed", key="fac_login_email")
-                st.markdown("<div class='form-label'>Account Password</div>", unsafe_allow_html=True)
-                l_pw = st.text_input("", type="password", label_visibility="collapsed", key="fac_login_pw")
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.form_submit_button("AUTHENTICATE WORKSPACE", type="primary", use_container_width=True):
-                    user = conn.execute("SELECT * FROM users WHERE email = ? AND role = 'Facility Owner'", (l_email,)).fetchone()
-                    if user and verify_pw(l_pw, user['password_hash'], user['salt']):
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_email"] = l_email
-                        st.session_state["user_role"] = "Facility Owner"
-                        st.session_state["tenant_id"] = user['tenant_id']
-                        st.success("Authentication successful!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid operator credentials.")
-
-        with reg_tab:
-            with st.form("reg_facility_auth_form"):
-                rc1, rc2 = st.columns(2)
-                with rc1:
-                    st.markdown("<div class='form-label'>Venue Facility Name*</div>", unsafe_allow_html=True)
-                    f_name = st.text_input("", label_visibility="collapsed", key="reg_fac_name")
-                    st.markdown("<div class='form-label'>Facility Designation</div>", unsafe_allow_html=True)
-                    f_type = st.selectbox("", ["Convention Center", "Hotel Ballroom", "Outdoor Arena", "Community Hall"], label_visibility="collapsed", key="reg_fac_type")
-                    st.markdown("<div class='form-label'>Corporate Email*</div>", unsafe_allow_html=True)
-                    f_email = st.text_input("", label_visibility="collapsed", key="reg_fac_email")
-                    st.markdown("<div class='form-label'>Account Password*</div>", unsafe_allow_html=True)
-                    f_pw = st.text_input("", type="password", label_visibility="collapsed", key="reg_fac_pw")
-                    st.markdown("<div class='form-label'>Direct Telephone Line*</div>", unsafe_allow_html=True)
-                    f_phone = st.text_input("", label_visibility="collapsed", key="reg_fac_phone")
-                with rc2:
-                    st.markdown("<div class='form-label'>WhatsApp Audit Verification Line*</div>", unsafe_allow_html=True)
-                    f_whatsapp = st.text_input("", placeholder="26771234567", label_visibility="collapsed", key="reg_fac_wa")
-                    st.markdown("<div class='form-label'>Physical Location / Street Address*</div>", unsafe_allow_html=True)
-                    f_address = st.text_input("", label_visibility="collapsed", key="reg_fac_addr")
-                    st.markdown("<div class='form-label'>Tax / CIPA Registration Number*</div>", unsafe_allow_html=True)
-                    f_tax = st.text_input("", label_visibility="collapsed", key="reg_fac_tax")
-                    st.markdown("<div class='form-label'>Max Guest Capacity</div>", unsafe_allow_html=True)
-                    f_cap = st.number_input("", min_value=10, value=500, label_visibility="collapsed", key="reg_fac_cap")
-                    st.markdown("<div class='form-label'>Primary Settlement Bank Details*</div>", unsafe_allow_html=True)
-                    f_bank = st.text_area("", placeholder="Bank Name, Branch, Account No.", label_visibility="collapsed", key="reg_fac_bank")
-
-                st.markdown("<div class='form-label'>Corporate Logo Image</div>", unsafe_allow_html=True)
-                logo_file = st.file_uploader("", type=["png", "jpg", "jpeg"], key="reg_fac_logo")
-                
-                if st.form_submit_button("REGISTER FACILITY & PUBLISH WORKSPACE", type="primary", use_container_width=True):
-                    if f_name and f_email and f_pw and f_tax:
-                        v_id = f"VEN-{int(datetime.datetime.now().timestamp())}"
-                        pw_hash, salt = hash_pw(f_pw)
-                        
-                        logo_str = process_compressed_image_upload(logo_file, DEFAULT_LOGO, max_dim=400)
-
-                        try:
-                            conn.execute("INSERT INTO users VALUES (?, ?, ?, ?, 'Facility Owner', ?)",
-                                         (f"USR-{v_id}", f_email, pw_hash, salt, v_id))
-                            conn.execute("""INSERT INTO venues 
-                                (venue_id, name, type, email, phone, whatsapp_no, address, max_capacity, tax_id, bank_details, brand_color, logo_url, flyer_image_url, approved_supporter_ids)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '#0F172A', ?, ?, '[]')""",
-                                (v_id, f_name, f_type, f_email, f_phone, f_whatsapp, f_address, f_cap, f_tax, f_bank, logo_str, SPACE_PRESETS[0]))
-                            conn.commit()
-                            st.success("Commercial Property successfully registered. Please log in.")
-                        except sqlite3.IntegrityError:
-                            st.error("Email is already registered.")
-                    else:
-                        st.error("Please fill in all mandatory fields.")
-    else:
-        v_id = st.session_state["tenant_id"]
-        venue = conn.execute("SELECT * FROM venues WHERE venue_id = ?", (v_id,)).fetchone()
-        
-        st.subheader(f"Workspace: {venue['name']}")
-
-        # ------------------- OPERATIONAL STATS & KPI DASHBOARD -------------------
-        st.markdown("##### 📊 Venue Operational Performance & Booking Statistics")
-        v_bookings = conn.execute("SELECT * FROM bookings WHERE venue_id = ?", (v_id,)).fetchall()
-        v_tickets = conn.execute("SELECT * FROM tickets WHERE venue_id = ?", (v_id,)).fetchall()
-        
-        tot_venue_rev = sum(b['venue_cost'] for b in v_bookings if 'Cancelled' not in b['status'])
-        tot_tkt_rev = sum(t['total_paid'] for t in v_tickets if 'Cancelled' not in t['status'])
-        active_bk_cnt = len([b for b in v_bookings if 'Cancelled' not in b['status']])
-        tkt_sold_cnt = sum(t['qty'] for t in v_tickets if 'Cancelled' not in t['status'])
-
-        m1, m2, m3, m4 = st.columns(4)
-        m1.markdown(f"<div class='metric-card'><small>Total Venue Revenue</small><h3>BWP {tot_venue_rev:,.2f}</h3></div>", unsafe_allow_html=True)
-        m2.markdown(f"<div class='metric-card'><small>Active Space Bookings</small><h3>{active_bk_cnt}</h3></div>", unsafe_allow_html=True)
-        m3.markdown(f"<div class='metric-card'><small>Box Office Revenue</small><h3>BWP {tot_tkt_rev:,.2f}</h3></div>", unsafe_allow_html=True)
-        m4.markdown(f"<div class='metric-card'><small>Total Tickets Sold</small><h3>{tkt_sold_cnt}</h3></div>", unsafe_allow_html=True)
-        st.divider()
-
-        tab_subspaces, tab_supp, tab_events, tab_owner_pop, tab_reports = st.tabs([
-            "🏛️ Sub-Space Inventory", "🤝 Vendor Approvals", "🎟️ Public Events", "📲 WhatsApp POP Verification", "📈 Detailed Booking Ledger"
-        ])
-        
-        with tab_subspaces:
-            with st.form("add_space_form"):
-                st.markdown("##### Add New Sub-Space Asset")
-                sc1, sc2, sc3 = st.columns(3)
-                sp_name = sc1.text_input("Sub-Space Name (e.g. Hall A)")
-                sp_cap = sc2.number_input("Max Capacity", min_value=1, value=100)
-                sp_rate = sc3.number_input("Daily Hire Tariff (BWP)", min_value=0.0, value=1500.0)
-                sp_img = st.file_uploader("Space Image", type=["png", "jpg", "jpeg"])
-                
-                if st.form_submit_button("ADD SUB-SPACE TO INVENTORY"):
-                    if sp_name:
-                        img_str = process_compressed_image_upload(sp_img, SPACE_PRESETS[0], max_dim=400)
-                        conn.execute("INSERT INTO spaces (venue_id, name, capacity, daily_rate, image_url) VALUES (?, ?, ?, ?, ?)",
-                                     (v_id, sp_name, sp_cap, sp_rate, img_str))
-                        conn.commit()
-                        st.success(f"Added {sp_name} to inventory.")
-                        st.rerun()
-
-            st.divider()
-            st.markdown("##### Current Sub-Spaces")
-            spaces = conn.execute("SELECT * FROM spaces WHERE venue_id = ?", (v_id,)).fetchall()
-            for s in spaces:
-                col1, col2 = st.columns([1, 4])
-                col1.image(s['image_url'] or SPACE_PRESETS[0], use_container_width=True)
-                col2.write(f"**{s['name']}** | Capacity: {s['capacity']} | Daily Rate: BWP {s['daily_rate']:,.2f}")
-
-        with tab_supp:
-            st.markdown("##### Approved Vendor Network")
-            all_vendors = conn.execute("SELECT * FROM supporters").fetchall()
-            current_approved = json.loads(venue['approved_supporter_ids'] or "[]")
-            
-            updated_approved = []
-            for v in all_vendors:
-                is_app = v['supporter_id'] in current_approved
-                if st.checkbox(f"Approve {v['business_name']} ({v['category']})", value=is_app, key=f"chk_v_{v['supporter_id']}"):
-                    updated_approved.append(v['supporter_id'])
-            
-            if st.button("UPDATE VENDOR NETWORK APPROVALS"):
-                conn.execute("UPDATE venues SET approved_supporter_ids = ? WHERE venue_id = ?", (json.dumps(updated_approved), v_id))
-                conn.commit()
-                st.success("Vendor network updated successfully.")
-
-        with tab_events:
-            st.markdown("##### Create & Manage Public Ticketed Events")
-            
-            ev_title = st.text_input("Event Title*", key="ev_p_title")
-            col_e1, col_e2 = st.columns(2)
-            ev_date = col_e1.date_input("Event Date*", min_value=datetime.date.today(), key="ev_p_date")
-            ev_price = col_e2.number_input("Ticket Tariff (BWP)*", min_value=0.0, value=100.0, step=10.0, key="ev_p_price")
-            
-            t_col1, t_col2 = st.columns(2)
-            ev_start_time = t_col1.time_input("Event Start Time*", value=datetime.time(18, 0), key="ev_p_start")
-            ev_end_time = t_col2.time_input("Event End Time*", value=datetime.time(23, 0), key="ev_p_end")
-
-            ev_comments = st.text_area("Additional Notes / Comments for Flyer", key="ev_p_comments")
-            ev_flyer_bg = st.file_uploader("Upload Custom Flyer Background Image", type=["png", "jpg", "jpeg"], key="ev_p_flyer_bg")
-            
-            st.divider()
-            st.markdown("##### 👁️ Live Flyer Preview")
-            
-            start_str = ev_start_time.strftime("%H:%M")
-            end_str = ev_end_time.strftime("%H:%M")
-
-            if ev_title:
-                preview_flyer = generate_branded_flyer(
-                    venue_name=venue['name'],
-                    event_title=ev_title,
-                    event_date=str(ev_date),
-                    price=ev_price,
-                    start_time=start_str,
-                    end_time=end_str,
-                    comments=ev_comments,
-                    uploaded_bg_file=ev_flyer_bg,
-                    brand_color=venue['brand_color'] or "#0F172A"
-                )
-                st.image(preview_flyer, caption="Live Preview of Branded Flyer Pass", width=300)
-            else:
-                st.caption("Type an event title above to view the live generated flyer preview.")
-
-            st.divider()
-            if st.button("PUBLISH EVENT TO BOX OFFICE", type="primary", use_container_width=True):
-                if ev_title:
-                    ev_id = f"EV-{int(datetime.datetime.now().timestamp())}"
-                    
-                    flyer_str = generate_branded_flyer(
-                        venue_name=venue['name'],
-                        event_title=ev_title,
-                        event_date=str(ev_date),
-                        price=ev_price,
-                        start_time=start_str,
-                        end_time=end_str,
-                        comments=ev_comments,
-                        uploaded_bg_file=ev_flyer_bg,
-                        brand_color=venue['brand_color'] or "#0F172A"
-                    )
-                    
-                    conn.execute("""INSERT INTO events 
-                        (event_id, venue_id, venue_name, space_name, title, date, price, description, flyer_url, is_active)
-                        VALUES (?, ?, ?, 'Main Facility', ?, ?, ?, ?, ?, 1)""",
-                        (ev_id, v_id, venue['name'], ev_title, str(ev_date), ev_price, ev_comments, flyer_str))
-                    conn.commit()
-                    st.success(f"🎉 Event '{ev_title}' published successfully!")
-                    st.rerun()
-                else:
-                    st.error("Please enter a title for the event before publishing.")
-
-            st.divider()
-            st.markdown("##### Published Events")
-            
-            my_events = conn.execute("SELECT * FROM events WHERE venue_id = ? ORDER BY date DESC", (v_id,)).fetchall()
-            if not my_events:
-                st.info("No public events published yet.")
-            else:
-                for ev in my_events:
-                    with st.expander(f"{'🟢 Active' if ev['is_active'] else '🔴 Inactive'} — {ev['title']} ({ev['date']})"):
-                        ec1, ec2 = st.columns([1, 2])
-                        if ev['flyer_url']:
-                            ec1.image(ev['flyer_url'], width=150)
-                        ec2.write(f"**Ticket Tariff:** BWP {ev['price']:,.2f}")
-                        ec2.write(f"**Notes:** {ev['description'] or 'N/A'}")
-                        
-                        btn_label = "Deactivate Event" if ev['is_active'] else "Activate Event"
-                        if ec2.button(btn_label, key=f"toggle_ev_{ev['event_id']}"):
-                            new_status = 0 if ev['is_active'] else 1
-                            conn.execute("UPDATE events SET is_active = ? WHERE event_id = ?", (new_status, ev['event_id']))
-                            conn.commit()
-                            st.rerun()
-
-        with tab_owner_pop:
-            st.markdown("##### Capture Received WhatsApp POP & Release Ticket Passes")
-            
-            event_tickets = conn.execute("""
-                SELECT * FROM tickets 
-                WHERE venue_id = ? 
-                ORDER BY ticket_id DESC
-            """, (v_id,)).fetchall()
-
-            if not event_tickets:
-                st.info("No ticket orders submitted for your events yet.")
-            else:
-                pending_tkts = [t for t in event_tickets if 'Pending' in t['status']]
-                released_tkts = [t for t in event_tickets if 'Verified' in t['status'] or 'Claimed' in t['status']]
-                
-                st.markdown(f"**Pending Orders Needing WhatsApp POP Verification:** `{len(pending_tkts)}`")
-                
-                for t in pending_tkts:
-                    with st.expander(f"⏳ Order Ref #{t['ticket_id']} — {t['buyer']} ({t['event_title']})", expanded=True):
-                        col1, col2 = st.columns([2, 3])
-                        with col1:
-                            st.write(f"**Buyer Email:** {t['email']}")
-                            st.write(f"**Qty Purchased:** {t['qty']} Ticket(s)")
-                            st.write(f"**Total Amount Due:** BWP {t['total_paid']:,.2f}")
-                            st.write(f"**Payment Method:** {t['payment_method']}")
-                        
-                        with col2:
-                            pop_ref = st.text_input("Enter Received WhatsApp POP / Bank Ref #", key=f"owner_pop_input_{t['ticket_id']}")
-                            pop_file = st.file_uploader("Upload POP Screenshot (Optional)", type=["png", "jpg", "jpeg"], key=f"owner_pop_file_{t['ticket_id']}")
-                            
-                            if st.button("✅ CAPTURE POP & RELEASE TICKET PASS", key=f"rel_tkt_btn_{t['ticket_id']}", type="primary"):
-                                final_ref = pop_ref if pop_ref else "WhatsApp POP Confirmed"
-                                if pop_file is not None:
-                                    final_ref += " (Img Uploaded)"
-
-                                conn.execute("""
-                                    UPDATE tickets 
-                                    SET status = 'Verified / Active', pop_reference = ? 
-                                    WHERE ticket_id = ?
-                                """, (final_ref, t['ticket_id']))
-                                conn.commit()
-                                st.success(f"🎟️ Ticket Pass #{t['ticket_id']} for {t['buyer']} RELEASED!")
-                                st.rerun()
-
-                if released_tkts:
-                    st.divider()
-                    st.markdown(f"**Released / Verified Ticket Passes ({len(released_tkts)}):**")
-                    for rt in released_tkts:
-                        qr_b64 = generate_qr_code_base64(rt['verification_hash'])
-                        with st.expander(f"✅ Pass #{rt['ticket_id']} — {rt['buyer']} | Status: {rt['status']}"):
-                            st.markdown(f"""
-                                <div class="ticket-pass">
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <h3 style="margin:0;">{rt['event_title']}</h3>
-                                        <span style="background:#10B981; color:white; padding:4px 8px; border-radius:8px; font-size:0.75rem;">VERIFIED</span>
-                                    </div>
-                                    <hr>
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <div style="text-align:left;">
-                                            <p style="margin:2px 0;"><b>BUYER:</b> {rt['buyer']}</p>
-                                            <p style="margin:2px 0;"><b>QTY:</b> {rt['qty']} Pass(es)</p>
-                                            <p style="margin:2px 0;"><b>POP REF:</b> {rt['pop_reference']}</p>
-                                            <p style="margin:2px 0; font-family:monospace; color:#D97706;"><b>HASH:</b> {rt['verification_hash']}</p>
-                                        </div>
-                                        <img src="{qr_b64}" style="width:90px; height:90px;">
-                                    </div>
-                                </div>
-                            """, unsafe_allow_html=True)
-
-        with tab_reports:
-            st.markdown("##### Detailed Facility Booking & Sales Audit Ledger")
-            if not v_bookings:
-                st.info("No bookings recorded to date.")
-            else:
-                table_data = []
-                for b in v_bookings:
-                    table_data.append({
-                        "Booking Ref": b['booking_id'],
-                        "Space Name": b['space_name'],
-                        "Client Name": b['customer_name'],
-                        "Event Date": b['booking_date'],
-                        "Amount (BWP)": f"{b['venue_cost']:,.2f}",
-                        "Status": b['status'],
-                        "POP Ref": b['pop_reference'] or "Pending"
-                    })
-                st.dataframe(table_data, use_container_width=True)
-
-    conn.close()
-
-# ---------------------------------------------------------
-# 7. MODULE 3: VENDOR PORTAL & SERVICE FULFILLMENT
-# ---------------------------------------------------------
-elif user_role == "Vendor Portal & Service Fulfillment":
-    st.markdown("<div class='exec-title'>Vendor Portal & Service Fulfillment</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Ancillary Service Provider Management Console</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
-
-    if not st.session_state["authenticated"] or st.session_state["user_role"] != "Supporter":
-        st.info("🔒 Service Provider Authentication Required")
-        v_login_tab, v_reg_tab = st.tabs(["Vendor Account Login", "Register Service Entity"])
-        
-        with v_login_tab:
-            with st.form("vendor_login_form"):
-                st.markdown("<div class='form-label'>Corporate Email Address</div>", unsafe_allow_html=True)
-                vl_email = st.text_input("", label_visibility="collapsed", key="v_login_email")
-                st.markdown("<div class='form-label'>Account Password</div>", unsafe_allow_html=True)
-                vl_pw = st.text_input("", type="password", label_visibility="collapsed", key="v_login_pw")
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.form_submit_button("AUTHENTICATE VENDOR WORKSPACE", type="primary", use_container_width=True):
-                    user = conn.execute("SELECT * FROM users WHERE email = ? AND role = 'Supporter'", (vl_email,)).fetchone()
-                    if user and verify_pw(vl_pw, user['password_hash'], user['salt']):
-                        st.session_state["authenticated"] = True
-                        st.session_state["user_email"] = vl_email
-                        st.session_state["user_role"] = "Supporter"
-                        st.session_state["tenant_id"] = user['tenant_id']
-                        st.success("Authentication successful!")
-                        st.rerun()
-                    else:
-                        st.error("Invalid vendor credentials.")
-
-        with v_reg_tab:
-            with st.form("reg_vendor_form"):
-                vc1, vc2 = st.columns(2)
-                with vc1:
-                    v_biz = st.text_input("Business Name*")
-                    v_cat = st.selectbox("Service Category", ["Catering", "Audio Visual", "Security", "Decor", "Photography"])
-                    v_email = st.text_input("Corporate Email*")
-                    v_pw = st.text_input("Account Password*", type="password")
-                with vc2:
-                    v_contact = st.text_input("Contact Person Name*")
-                    v_phone = st.text_input("Direct Telephone Line*")
-                    v_bank = st.text_area("Settlement Bank Details*")
-                
-                v_logo_file = st.file_uploader("Corporate Vendor Logo", type=["png", "jpg", "jpeg"], key="reg_vendor_logo")
-
-                if st.form_submit_button("REGISTER VENDOR ENTITY", type="primary", use_container_width=True):
-                    if v_biz and v_email and v_pw:
-                        s_id = f"SUP-{int(datetime.datetime.now().timestamp())}"
-                        pw_hash, salt = hash_pw(v_pw)
-                        v_logo_str = process_compressed_image_upload(v_logo_file, DEFAULT_LOGO, max_dim=400)
-                        
-                        try:
-                            conn.execute("INSERT INTO users VALUES (?, ?, ?, ?, 'Supporter', ?)", (f"USR-{s_id}", v_email, pw_hash, salt, s_id))
-                            conn.execute("""INSERT INTO supporters (supporter_id, business_name, category, contact_person, email, phone, bank_details, brand_color, logo_url)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, '#0F172A', ?)""",
-                                         (s_id, v_biz, v_cat, v_contact, v_email, v_phone, v_bank, v_logo_str))
-                            conn.commit()
-                            st.success("Vendor profile registered successfully!")
-                        except sqlite3.IntegrityError:
-                            st.error("Email is already registered.")
-    else:
-        sup_id = st.session_state["tenant_id"]
-        supporter = conn.execute("SELECT * FROM supporters WHERE supporter_id = ?", (sup_id,)).fetchone()
-        
-        st.subheader(f"Vendor Workspace: {supporter['business_name']}")
-        
-        v_tab_catalog, v_tab_orders = st.tabs(["📦 Service Tariff Catalog", "📋 Active Service Orders"])
-        
-        with v_tab_catalog:
-            with st.form("add_template_form"):
-                st.markdown("##### Add New Service Package")
-                tc1, tc2 = st.columns(2)
-                item_name = tc1.text_input("Service Item Name (e.g. Executive Buffet)")
-                unit_type = tc2.selectbox("Unit Basis", ["Per Person", "Per Day", "Flat Fee", "Per Hour"])
-                unit_price = tc1.number_input("Unit Price (BWP)", min_value=0.0, value=250.0)
-                item_desc = tc2.text_area("Service Specs / Inclusions")
-                item_img = st.file_uploader("Catalog Photo", type=["png", "jpg", "jpeg"])
-                
-                if st.form_submit_button("PUBLISH SERVICE TARIFF"):
-                    if item_name:
-                        img_str = process_compressed_image_upload(item_img, "", max_dim=400)
-                        conn.execute("""INSERT INTO vendor_templates (supporter_id, item_name, description, unit_type, unit_price, image_url)
-                                        VALUES (?, ?, ?, ?, ?, ?)""", (sup_id, item_name, item_desc, unit_type, unit_price, img_str))
-                        conn.commit()
-                        st.success("Service package added successfully!")
-                        st.rerun()
-
-            st.divider()
-            st.markdown("##### Current Service Catalog")
-            templates = conn.execute("SELECT * FROM vendor_templates WHERE supporter_id = ?", (sup_id,)).fetchall()
-            for t in templates:
-                st.write(f"**{t['item_name']}** — BWP {t['unit_price']:,.2f} / {t['unit_type']}")
-
-        with v_tab_orders:
-            st.markdown("##### Service Invoices & Orders")
-            vinvs = conn.execute("SELECT * FROM vendor_invoices WHERE supporter_id = ?", (sup_id,)).fetchall()
-            if not vinvs:
-                st.info("No active service orders found.")
-            else:
-                for vi in vinvs:
-                    st.write(f"**Invoice #{vi['vendor_invoice_id']}** | Event Date: {vi['event_date']} | Status: {vi['status']} | Total: BWP {vi['total_amount']:,.2f}")
-    
-    conn.close()
-
-# ---------------------------------------------------------
-# 8. MODULE 4: ACCESS CONTROL & VERIFICATION SUITE
-# ---------------------------------------------------------
-elif user_role == "Access Control & Verification Suite":
-    st.markdown("<div class='exec-title'>Access Control & Gate Scanner Suite</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Real-Time QR Admission Pass Verification</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
-    
-    scan_hash = st.text_input("Enter Pass Security Hash / Scan String:", placeholder="HASH-XXXXXXXXXX")
-    
-    if st.button("VERIFY & PROCESS ADMISSION PASS", type="primary"):
-        if scan_hash:
-            ticket = conn.execute("SELECT * FROM tickets WHERE verification_hash = ?", (scan_hash,)).fetchone()
-            if not ticket:
-                st.error("❌ INVALID TICKET PASS: Hash reference not found in master ledger.")
-            elif ticket['status'] == 'Admitted / Claimed':
-                st.error(f"❌ REJECTED - PASS ALREADY USED: Claimed at {ticket['scanned_at']}")
-            elif 'Pending' in ticket['status']:
-                st.warning(f"⚠️ ADMISSION DENIED: Settlement Status is '{ticket['status']}'. Payment verification required.")
-            elif ticket['status'] == 'Verified / Active':
-                now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                conn.execute("UPDATE tickets SET status = 'Admitted / Claimed', scanned_at = ? WHERE ticket_id = ?", (now_str, ticket['ticket_id']))
-                conn.commit()
-                st.balloons()
-                st.success(f"✅ ACCESS GRANTED: Welcome {ticket['buyer']}! Pass validated ({ticket['qty']} Person Admission).")
-        else:
-            st.warning("Please enter a valid ticket security hash.")
-            
-    conn.close()
-
-# ---------------------------------------------------------
-# 9. MODULE 5: EXECUTIVE MASTER LEDGER & AUDIT SUITE
-# ---------------------------------------------------------
-elif user_role == "Executive Master Ledger & Audit Suite":
-    st.markdown("<div class='exec-title'>Executive Master Ledger & Settlement Audit</div>", unsafe_allow_html=True)
-    st.markdown("<div class='exec-subtitle'>Financial Oversight, Proof-of-Payment Verification & Reconciliation</div>", unsafe_allow_html=True)
-    st.markdown("<div class='gold-divider'></div>", unsafe_allow_html=True)
-    
-    conn = get_db_connection()
-    
-    if not st.session_state["authenticated"] or st.session_state["user_role"] != "Auditor":
-        st.info("🔒 Auditor / Executive Clearance Required")
-        with st.form("audit_login_form"):
-            a_email = st.text_input("Auditor Email Address")
-            a_pw = st.text_input("Master Password", type="password")
-            if st.form_submit_button("AUTHENTICATE AUDIT CONSOLE", type="primary", use_container_width=True):
-                if a_email == "admin@executive.co.bw" and a_pw == "AdminPass123!":
-                    st.session_state["authenticated"] = True
-                    st.session_state["user_email"] = a_email
-                    st.session_state["user_role"] = "Auditor"
-                    st.success("Master Clearance Granted.")
-                    st.rerun()
-                else:
-                    st.error("Invalid audit credentials.")
-    else:
-        st.subheader("Global Settlement Audit Console")
-        
-        tab_v_settle, tab_tkt_settle = st.tabs(["🏛️ Venue & Vendor Bookings Settlement", "🎟️ Ticket Sales Settlement"])
-        
-        with tab_v_settle:
-            st.markdown("##### Venue Hire & Vendor Invoices Reconciliation")
-            bookings = conn.execute("SELECT * FROM bookings").fetchall()
-            for b in bookings:
-                with st.expander(f"Booking #{b['booking_id']} — {b['customer_name']} (BWP {b['venue_cost']:,.2f}) — Status: {b['status']}"):
-                    st.write(f"**Venue Asset:** {b['space_name']} | **Event Date:** {b['booking_date']}")
-                    st.write(f"**Contact Email:** {b['customer_email']} | **Phone:** {b['customer_phone']}")
-                    st.write(f"**Payment Method:** {b['payment_method']} | **POP Reference:** {b['pop_reference'] or 'None Provided'}")
-                    
-                    pop_ref = st.text_input(f"Proof of Payment Ref for {b['booking_id']}", value=b['pop_reference'] or "", key=f"pop_b_{b['booking_id']}")
-                    
-                    c1, c2 = st.columns(2)
-                    if c1.button("APPROVE PAYMENT & CONFIRM RESERVATION", key=f"app_b_{b['booking_id']}"):
-                        conn.execute("UPDATE bookings SET status = 'Settled & Confirmed', pop_reference = ? WHERE booking_id = ?", (pop_ref, b['booking_id']))
-                        conn.commit()
-                        st.success("Booking status updated to Settled & Confirmed.")
-                        st.rerun()
-                    if c2.button("CANCEL RESERVATION", key=f"can_b_{b['booking_id']}"):
-                        conn.execute("UPDATE bookings SET status = 'Cancelled' WHERE booking_id = ?", (b['booking_id'],))
-                        conn.commit()
-                        st.warning("Booking marked as Cancelled.")
-                        st.rerun()
-
-        with tab_tkt_settle:
-            st.markdown("##### Box Office Ticket Pass Reconciliations")
-            tkts = conn.execute("SELECT * FROM tickets").fetchall()
-            for t in tkts:
-                with st.expander(f"Pass #{t['ticket_id']} — {t['buyer']} ({t['event_title']}) — Status: {t['status']}"):
-                    st.write(f"**Qty:** {t['qty']} | **Total Paid:** BWP {t['total_paid']:,.2f} | **Method:** {t['payment_method']}")
-                    st.write(f"**Security Hash:** `{t['verification_hash']}`")
-                    
-                    tkt_pop = st.text_input(f"POP Reference for {t['ticket_id']}", value=t['pop_reference'] or "", key=f"pop_t_{t['ticket_id']}")
-                    if st.button("VERIFY WhatsApp POP & RELEASE ACTIVE TICKET PASS", key=f"app_t_{t['ticket_id']}"):
-                        conn.execute("UPDATE tickets SET status = 'Verified / Active', pop_reference = ? WHERE ticket_id = ?", (tkt_pop, t['ticket_id']))
-                        conn.commit()
-                        st.success("Ticket pass activated and released!")
-                        st.rerun()
-
-    conn.close()
